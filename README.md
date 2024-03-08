@@ -16,7 +16,7 @@ I love to explore new tech and tech world. the coding is my intrest , my hobbie.
 
 I enjoy, to code, to write poet , to watch movies .
 
-<img align="right" alt="GIF" src="Logo.png" width="340" height="214" />
+<img align="right" alt="GIF" src="Logo.png" width="340" height="300" />
 
 
 ### Talking about Personal Stuff:

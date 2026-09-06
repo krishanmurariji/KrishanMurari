@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/**/*.ts": {
-      "includeFiles": "{dev/**,public/android-chrome-512x512.png,public/watermark-logo.png}"
-    }
-  }
-}

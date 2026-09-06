@@ -7,12 +7,15 @@
 // production build.
 //
 // The real deploy target is Vercel — see api/contact.ts, which ports this
-// same send logic (shared via send-contact-email.ts, so there's one copy
-// of the validation/nodemailer code, not two) into a serverless function.
+// same send logic (shared via api/_lib/send-contact-email.ts, so there's
+// one copy of the validation/nodemailer code, not two) into a serverless
+// function. That shared file lives under api/_lib/ rather than here in
+// dev/ — see its own comment for why a file imported by a Vercel function
+// specifically needs to live inside the api/ directory tree.
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { Plugin } from 'vite';
-import { sendContactEmail, validateContactFields } from './send-contact-email';
+import { sendContactEmail, validateContactFields } from '../api/_lib/send-contact-email';
 
 // Both embedded via cid, not a hosted URL — this needs to render correctly
 // with no public deploy and no internet-reachable image host. The header
@@ -20,6 +23,10 @@ import { sendContactEmail, validateContactFields } from './send-contact-email';
 // pre-faded copy of it instead (public/watermark-logo.png, ~7% alpha via
 // Pillow — see ackEmailTemplate.ts's own comment on why a background-image
 // needs an already-faded source file rather than a live opacity tweak).
+// Local file paths here (unlike api/contact.ts's live-URL approach) since
+// this only ever runs against a local `public/` directory that's always
+// right there on disk during `vite dev` — no deployed-function filesystem
+// question to work around.
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const LETTERHEAD_LOGO_PATH = path.join(PUBLIC_DIR, 'android-chrome-512x512.png');
 const WATERMARK_LOGO_PATH = path.join(PUBLIC_DIR, 'watermark-logo.png');

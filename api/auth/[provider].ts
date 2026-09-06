@@ -1,11 +1,12 @@
 // Production version of the lock screen's OAuth sign-in endpoints (see
 // dev/oauth-plugin.ts for the local-dev equivalent, and
-// dev/oauth-providers.ts for the actual shared provider configs + token-
-// exchange logic both call into). One dynamic route handles all four
+// _lib/oauth-providers.ts for the actual shared provider configs + token-
+// exchange logic both call into — kept inside api/ specifically, see that
+// file's own comment for why). One dynamic route handles all four
 // providers (github/linkedin/google/microsoft) rather than four near-
 // identical files, mirroring PROVIDERS itself being a single map.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PROVIDERS, exchangeCode } from '../../dev/oauth-providers';
+import { PROVIDERS, exchangeCode } from '../_lib/oauth-providers';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

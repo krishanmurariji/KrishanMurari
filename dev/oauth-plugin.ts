@@ -14,11 +14,14 @@
 //
 // This gets local testing fully working right now. The real deploy target
 // is Vercel — see api/auth/[provider].ts, which ports this same
-// token-exchange logic (shared via oauth-providers.ts, so there's one copy
-// of the provider configs, not two) into a serverless function, since
-// Vite's dev middleware doesn't exist in the built output at all.
+// token-exchange logic (shared via api/_lib/oauth-providers.ts, so there's
+// one copy of the provider configs, not two) into a serverless function,
+// since Vite's dev middleware doesn't exist in the built output at all.
+// That shared file lives under api/_lib/ rather than here in dev/ — see
+// its own comment for why a file imported by a Vercel function specifically
+// needs to live inside the api/ directory tree.
 import type { Plugin } from 'vite';
-import { PROVIDERS, exchangeCode } from './oauth-providers';
+import { PROVIDERS, exchangeCode } from '../api/_lib/oauth-providers';
 
 function readJsonBody(req: import('http').IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {

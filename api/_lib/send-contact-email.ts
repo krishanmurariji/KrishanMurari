@@ -1,9 +1,11 @@
 // The actual contact-form email logic (validate, notify the site owner,
-// send the visitor an acknowledgement), shared between the local dev
-// server (email-plugin.ts, a Vite middleware) and the production deploy
-// (api/contact.ts, a Vercel serverless function) — this file has no
-// dependency on either Vite or Vercel, just nodemailer, so it can be
-// imported from both without either one dragging the other in.
+// send the visitor an acknowledgement), shared between the production
+// deploy (../contact.ts, a Vercel serverless function) and the local dev
+// server (../../dev/email-plugin.ts, a Vite middleware). Lives under
+// api/_lib/ rather than dev/ — see oauth-providers.ts's own comment in this
+// same folder for why a file imported by a Vercel function specifically
+// needs to live inside the api/ directory tree, not just anywhere in the
+// repo.
 import nodemailer from 'nodemailer';
 import { buildAckEmailHtml } from './ackEmailTemplate';
 

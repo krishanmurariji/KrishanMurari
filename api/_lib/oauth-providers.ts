@@ -1,8 +1,21 @@
 // The actual OAuth token-exchange + userinfo logic, shared between the
-// local dev server (oauth-plugin.ts, a Vite middleware) and the production
-// deploy (api/auth/[provider].ts, a Vercel serverless function) — this file
-// itself has no dependency on either Vite or Vercel, just plain fetch, so
-// it can be imported from both without either one dragging the other in.
+// production Vercel functions (../auth/[provider].ts) and the local dev
+// server (../../dev/oauth-plugin.ts, a Vite middleware, imports this same
+// file across the repo — Vite bundles the whole app so cross-directory
+// imports are fine there). This file itself has no dependency on either
+// Vite or Vercel, just plain fetch.
+//
+// Lives under api/_lib/ (the leading underscore is Vercel's own convention
+// for "not a route") rather than in dev/, specifically because it's
+// imported *by* a Vercel serverless function: Vercel's Node runtime does
+// strict ESM resolution and does not reliably bundle/trace relative
+// imports that reach outside the api/ directory tree — a file physically
+// outside api/ (dev/oauth-providers.ts, in an earlier version of this
+// file) came back "Cannot find module" at runtime on Vercel even though it
+// worked fine locally, because the file was never copied into the
+// deployed function at all. Keeping shared code inside api/ (even though
+// it's also used by non-Vercel code) is what makes Vercel's own bundler
+// actually include it.
 export interface NormalizedUser {
   name: string;
   email: string;

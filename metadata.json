@@ -1,0 +1,6 @@
+{
+  "name": "3D Portfolio",
+  "description": "WWDC-level cinematic 3D portfolio using R3F and GSAP ScrollTrigger",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

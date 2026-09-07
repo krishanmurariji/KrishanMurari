@@ -1,12 +1,127 @@
 // Production version of the lock screen's OAuth sign-in endpoints (see
-// dev/oauth-plugin.ts for the local-dev equivalent, and
-// _lib/oauth-providers.ts for the actual shared provider configs + token-
-// exchange logic both call into — kept inside api/ specifically, see that
-// file's own comment for why). One dynamic route handles all four
-// providers (github/linkedin/google/microsoft) rather than four near-
-// identical files, mirroring PROVIDERS itself being a single map.
+// dev/oauth-plugin.ts for the local-dev equivalent, which imports the same
+// logic below from api/_lib/oauth-providers.ts). This file is deliberately
+// self-contained — no relative imports to any other file in the repo, only
+// npm packages and Node built-ins — because Vercel's Node function builder
+// for this project does NOT bundle/trace relative imports for API routes
+// at all: two earlier attempts at sharing this logic via an imported file
+// (first at dev/oauth-providers.ts, then at api/_lib/oauth-providers.ts,
+// i.e. even *inside* the api/ directory tree) both deployed successfully
+// but crashed every request with `ERR_MODULE_NOT_FOUND` — confirmed live
+// via Vercel's own runtime logs, not assumed. Whatever file this function
+// itself compiles to is reliably present at runtime; anything it imports
+// via a relative path is not. Inlining is the proven-working fix; the
+// duplication with api/_lib/oauth-providers.ts (still the source dev/
+// imports) is the accepted cost — keep both in sync if a provider config
+// ever changes.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PROVIDERS, exchangeCode } from '../_lib/oauth-providers';
+
+interface NormalizedUser {
+  name: string;
+  email: string;
+  picture: string | null;
+}
+
+interface ProviderAuthConfig {
+  clientIdEnv: string;
+  clientSecretEnv: string;
+  tokenUrl: string;
+  tokenHeaders?: Record<string, string>;
+  fetchUser: (accessToken: string) => Promise<NormalizedUser>;
+}
+
+async function exchangeCode(
+  tokenUrl: string,
+  params: Record<string, string>,
+  extraHeaders?: Record<string, string>,
+): Promise<string> {
+  const res = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...extraHeaders },
+    body: new URLSearchParams(params),
+  });
+  if (!res.ok) throw new Error(`token exchange failed: ${await res.text()}`);
+  const data = (await res.json()) as { access_token?: string; error?: string; error_description?: string };
+  if (!data.access_token) throw new Error(data.error_description || data.error || 'token response had no access_token');
+  return data.access_token;
+}
+
+const PROVIDERS: Record<string, ProviderAuthConfig> = {
+  linkedin: {
+    clientIdEnv: 'VITE_LINKEDIN_CLIENT_ID',
+    clientSecretEnv: 'LINKEDIN_CLIENT_SECRET',
+    tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
+    fetchUser: async (token) => {
+      const res = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`LinkedIn userinfo failed: ${await res.text()}`);
+      const user = (await res.json()) as { name?: string; given_name?: string; family_name?: string; email?: string; picture?: string };
+      return {
+        name: user.name ?? ([user.given_name, user.family_name].filter(Boolean).join(' ') || 'LinkedIn User'),
+        email: user.email ?? '',
+        picture: user.picture ?? null,
+      };
+    },
+  },
+  github: {
+    clientIdEnv: 'VITE_GITHUB_CLIENT_ID',
+    clientSecretEnv: 'GITHUB_CLIENT_SECRET',
+    tokenUrl: 'https://github.com/login/oauth/access_token',
+    tokenHeaders: { Accept: 'application/json' },
+    fetchUser: async (token) => {
+      const headers = { Authorization: `Bearer ${token}`, 'User-Agent': 'portfolio-app', Accept: 'application/vnd.github+json' };
+      const res = await fetch('https://api.github.com/user', { headers });
+      if (!res.ok) throw new Error(`GitHub user fetch failed: ${await res.text()}`);
+      const user = (await res.json()) as { name?: string | null; login: string; avatar_url?: string; email?: string | null };
+
+      let email = user.email ?? '';
+      if (!email) {
+        const emailsRes = await fetch('https://api.github.com/user/emails', { headers });
+        if (emailsRes.ok) {
+          const emails = (await emailsRes.json()) as Array<{ email: string; primary: boolean; verified: boolean }>;
+          email = emails.find((e) => e.primary && e.verified)?.email ?? emails.find((e) => e.verified)?.email ?? '';
+        }
+      }
+
+      return { name: user.name || user.login, email, picture: user.avatar_url ?? null };
+    },
+  },
+  google: {
+    clientIdEnv: 'VITE_GOOGLE_CLIENT_ID',
+    clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    fetchUser: async (token) => {
+      const res = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`Google userinfo failed: ${await res.text()}`);
+      const user = (await res.json()) as { name?: string; email?: string; picture?: string };
+      return { name: user.name ?? 'Google User', email: user.email ?? '', picture: user.picture ?? null };
+    },
+  },
+  microsoft: {
+    clientIdEnv: 'VITE_MICROSOFT_CLIENT_ID',
+    clientSecretEnv: 'MICROSOFT_CLIENT_SECRET',
+    tokenUrl: 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
+    fetchUser: async (token) => {
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch('https://graph.microsoft.com/v1.0/me', { headers });
+      if (!res.ok) throw new Error(`Microsoft Graph /me failed: ${await res.text()}`);
+      const user = (await res.json()) as { displayName?: string; mail?: string | null; userPrincipalName?: string };
+
+      let picture: string | null = null;
+      try {
+        const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', { headers });
+        if (photoRes.ok) {
+          const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
+          const buffer = Buffer.from(await photoRes.arrayBuffer());
+          picture = `data:${contentType};base64,${buffer.toString('base64')}`;
+        }
+      } catch {
+        // no photo — picture stays null
+      }
+
+      return { name: user.displayName ?? 'Microsoft User', email: user.mail ?? user.userPrincipalName ?? '', picture };
+    },
+  },
+};
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -28,7 +143,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Vercel already parses a JSON request body into req.body for us.
   const body = (req.body ?? {}) as Record<string, unknown>;
   const code = typeof body.code === 'string' ? body.code : null;
   const redirectUri = typeof body.redirectUri === 'string' ? body.redirectUri : null;

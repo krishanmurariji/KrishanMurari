@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import RubiksCube from './RubiksCube';
 import GlassLogo3D from './GlassLogo3D';
 import gsap from 'gsap';
+import { usePrefersReducedMotion } from '../lib/useReducedMotion';
 
 interface ScatterPiece {
   baseX: number;
@@ -28,7 +29,7 @@ interface ScatterPiece {
 // toward the bottom of the frame (near the dock, where the glass backdrop shows them
 // through the blur) and a portion of them orbit their base position instead of just
 // bobbing, for a livelier "revolving" feel alongside the plain floaters.
-function ScatteredCubes() {
+function ScatteredCubes({ reducedMotion }: { reducedMotion: boolean }) {
   const meshesRef = useRef<(THREE.Mesh | null)[]>([]);
 
   const material = useMemo(() => new THREE.MeshPhysicalMaterial({
@@ -60,6 +61,12 @@ function ScatteredCubes() {
   }), []);
 
   useFrame((state) => {
+    // `prefers-reduced-motion`: leave every decorative cube exactly at its
+    // initial (already-set-via-props) position instead of continuously
+    // bobbing/orbiting/spinning it — this is 36 meshes' worth of trig +
+    // quaternion math per frame purely for ambient flavor, with nothing
+    // else depending on it running.
+    if (reducedMotion) return;
     const t = state.clock.getElapsedTime();
     meshesRef.current.forEach((mesh, i) => {
       if (!mesh) return;
@@ -126,6 +133,7 @@ function SceneContents({
   // continue on into a drag-to-spin.
   const [freeSpin, setFreeSpin] = useState(false);
   const lastPointerDownAt = useRef(0);
+  const reducedMotion = usePrefersReducedMotion();
 
   // The cube itself never pops in or swaps — RubiksCube assembles its own pieces in
   // place from progressRef. Once assembly hands off, just settle the camera in from
@@ -141,8 +149,15 @@ function SceneContents({
   }, [isLoading]);
 
   useFrame(state => {
-    cameraTarget.current.x = THREE.MathUtils.lerp(cameraTarget.current.x, state.pointer.x * 2, 0.05);
-    cameraTarget.current.y = THREE.MathUtils.lerp(cameraTarget.current.y, state.pointer.y * 2, 0.05);
+    // Skip the pointer-chase parallax under reduced motion — it's a
+    // continuous, mouse-driven camera drift, exactly the category of motion
+    // that preference exists to suppress. The camera still needs `lookAt`
+    // held every frame here (PresentationControls doesn't own the camera
+    // itself), just without chasing the pointer first.
+    if (!reducedMotion) {
+      cameraTarget.current.x = THREE.MathUtils.lerp(cameraTarget.current.x, state.pointer.x * 2, 0.05);
+      cameraTarget.current.y = THREE.MathUtils.lerp(cameraTarget.current.y, state.pointer.y * 2, 0.05);
+    }
     state.camera.position.set(cameraTarget.current.x, cameraTarget.current.y, cameraBaseZ.current.value);
     state.camera.lookAt(0, 0, 0);
   });
@@ -173,7 +188,7 @@ function SceneContents({
       <Environment preset={isLight ? 'warehouse' : 'city'} />
       <ambientLight intensity={isLight ? 1.5 : 0.5} />
       <directionalLight position={[10, 10, 10]} intensity={isLight ? 2 : 1} castShadow />
-      <ScatteredCubes />
+      <ScatteredCubes reducedMotion={reducedMotion} />
       <PresentationControls
         snap={!freeSpin}
         rotation={[0, 0, 0]}

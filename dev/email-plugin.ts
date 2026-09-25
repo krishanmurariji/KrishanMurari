@@ -1,10 +1,12 @@
 // Dev-only Vite middleware for the Email window's contact form
-// (src/components/apps/EmailApp.tsx) — sends the message via Gmail SMTP
-// using nodemailer. Lives here rather than client code for the same reason
-// as oauth-plugin.ts: it needs a real secret (the Gmail App Password),
-// which must never ship to the browser. This plugin's `configureServer`
-// hook only runs under `vite dev`/`vite preview`, never bundled into the
-// production build.
+// (src/components/apps/EmailApp.tsx) — sends the message via Zoho Mail SMTP
+// using nodemailer, after verifying a Cloudflare Turnstile token and a
+// basic per-IP rate limit (see api/_lib/send-contact-email.ts). Lives here
+// rather than client code for the same reason as oauth-plugin.ts: it needs
+// real secrets (the Zoho App Password, the Turnstile secret key), which
+// must never ship to the browser. This plugin's `configureServer` hook only
+// runs under `vite dev`/`vite preview`, never bundled into the production
+// build.
 //
 // The real deploy target is Vercel — see api/contact.ts, which ports this
 // same send logic (shared via api/_lib/send-contact-email.ts, so there's
@@ -15,7 +17,7 @@
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { Plugin } from 'vite';
-import { sendContactEmail, validateContactFields } from '../api/_lib/send-contact-email';
+import { sendContactEmail, validateContactFields, verifyTurnstile, checkRateLimit } from '../api/_lib/send-contact-email';
 
 // Both embedded via cid, not a hosted URL — this needs to render correctly
 // with no public deploy and no internet-reachable image host. The header
@@ -63,10 +65,22 @@ export function emailDevPlugin(): Plugin {
           res.end(JSON.stringify(payload));
         };
 
-        const gmailUser = process.env.GMAIL_USER;
-        const gmailPass = process.env.GMAIL_APP_PASSWORD;
-        if (!gmailUser || !gmailPass) {
-          sendJson(500, { error: 'GMAIL_USER / GMAIL_APP_PASSWORD not set in .env.local' });
+        const zohoUser = process.env.ZOHO_USER;
+        const zohoPass = process.env.ZOHO_APP_PASSWORD;
+        if (!zohoUser || !zohoPass) {
+          sendJson(500, { error: 'ZOHO_USER / ZOHO_APP_PASSWORD not set in .env.local' });
+          return;
+        }
+
+        const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+        if (!turnstileSecret) {
+          sendJson(500, { error: 'TURNSTILE_SECRET_KEY not set in .env.local' });
+          return;
+        }
+
+        const ip = (req.socket.remoteAddress || 'unknown').replace('::ffff:', '');
+        if (!checkRateLimit(ip)) {
+          sendJson(429, { error: 'Too many messages sent — please try again later.' });
           return;
         }
 
@@ -78,6 +92,12 @@ export function emailDevPlugin(): Plugin {
           return;
         }
 
+        const turnstileToken = typeof body.turnstileToken === 'string' ? body.turnstileToken : '';
+        if (!turnstileToken || !(await verifyTurnstile(turnstileToken, turnstileSecret, ip))) {
+          sendJson(400, { error: 'CAPTCHA verification failed — please try again.' });
+          return;
+        }
+
         const { fields, error } = validateContactFields(body);
         if (!fields) {
           sendJson(400, { error });
@@ -86,8 +106,8 @@ export function emailDevPlugin(): Plugin {
 
         try {
           await sendContactEmail(fields, {
-            gmailUser,
-            gmailPass,
+            zohoUser,
+            zohoPass,
             letterheadLogoPath: LETTERHEAD_LOGO_PATH,
             watermarkLogoPath: WATERMARK_LOGO_PATH,
           });

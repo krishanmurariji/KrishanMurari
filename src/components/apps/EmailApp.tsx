@@ -1,8 +1,10 @@
 // Content for the dock's "Email" window (see APP_BODIES in AppWindow.tsx) —
 // a real contact form (your email, subject, message) instead of just a
-// mailto: link. Submits to /api/contact, which sends it on via Gmail SMTP
-// (dev/email-plugin.ts in dev; see that file's own comment on what
-// production still needs). Validated on both ends — this side is for
+// mailto: link. Gated by a Cloudflare Turnstile check (see Turnstile.tsx)
+// before it'll submit at all — /api/contact re-verifies that token
+// server-side and rate-limits by IP before relaying the message through
+// Zoho Mail (dev/email-plugin.ts in dev; see that file's own comment on
+// what production still needs). Validated on both ends — this side is for
 // immediate feedback as the visitor types, the server re-checks everything
 // since a request could always be sent straight to the endpoint.
 //
@@ -14,11 +16,14 @@
 // Email/Subject side-by-side, taller message box) past `sm` so the window
 // doesn't read as a small fixed-size box floating in a sea of empty space
 // once it's maximized to fill the screen.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedSendButton from '../ui/AnimatedSendButton';
 import EnvelopeLoader from './email/EnvelopeLoader';
+import Turnstile, { type TurnstileHandle } from '../ui/Turnstile';
+
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
 // How long the envelope-loader intro plays before the form fades in — the
 // same "intro plays, then content fades in" pattern as the Experience
@@ -158,6 +163,8 @@ export default function EmailApp() {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState<Status>('idle');
   const [serverError, setServerError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   const errors = validate(email, subject, message);
   const hasErrors = Object.keys(errors).length > 0;
@@ -185,6 +192,11 @@ export default function EmailApp() {
     e.preventDefault();
     setTouched({ email: true, subject: true, message: true });
     if (hasErrors) return;
+    if (!turnstileToken) {
+      setStatus('error');
+      setServerError('Please complete the verification check before sending.');
+      return;
+    }
 
     setStatus('sending');
     setServerError(null);
@@ -192,7 +204,7 @@ export default function EmailApp() {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), subject: subject.trim(), message: message.trim() }),
+        body: JSON.stringify({ email: email.trim(), subject: subject.trim(), message: message.trim(), turnstileToken }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -202,6 +214,12 @@ export default function EmailApp() {
     } catch (err) {
       setStatus('error');
       setServerError(err instanceof Error ? err.message : 'Something went wrong — try again.');
+    } finally {
+      // A Turnstile token is single-use — reset the widget for a fresh one,
+      // whether this attempt succeeded (form clears and could be reused) or
+      // failed (retry needs a new token regardless).
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
     }
   };
 
@@ -313,7 +331,19 @@ export default function EmailApp() {
                 )}
               </AnimatePresence>
 
-              <motion.div custom={3} variants={fieldVariants} initial="hidden" animate="show" className="flex justify-center">
+              {TURNSTILE_SITE_KEY && (
+                <motion.div custom={3} variants={fieldVariants} initial="hidden" animate="show" className="flex justify-center">
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={TURNSTILE_SITE_KEY}
+                    onVerify={setTurnstileToken}
+                    onExpire={() => setTurnstileToken(null)}
+                    onError={() => setTurnstileToken(null)}
+                  />
+                </motion.div>
+              )}
+
+              <motion.div custom={4} variants={fieldVariants} initial="hidden" animate="show" className="flex justify-center">
                 <AnimatedSendButton status={status === 'sending' || status === 'sent' ? status : 'idle'} />
               </motion.div>
             </form>

@@ -23,6 +23,25 @@
 import type { Plugin } from 'vite';
 import { PROVIDERS, exchangeCode } from '../api/_lib/oauth-providers';
 
+// Best-effort in-memory rate limit, keyed by caller IP — mirrors
+// api/auth/[provider].ts's own (separate, since that file must stay
+// import-free for Vercel's bundler — see its comment on why).
+const rateLimitHits = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 10;
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const hits = (rateLimitHits.get(key) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (hits.length >= RATE_LIMIT_MAX) {
+    rateLimitHits.set(key, hits);
+    return false;
+  }
+  hits.push(now);
+  rateLimitHits.set(key, hits);
+  return true;
+}
+
 function readJsonBody(req: import('http').IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -55,6 +74,12 @@ export function oauthDevPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ error: message }));
           };
+
+          const ip = (req.socket.remoteAddress || 'unknown').replace('::ffff:', '');
+          if (!checkRateLimit(ip)) {
+            sendError(429, 'Too many sign-in attempts — please try again later.');
+            return;
+          }
 
           const clientId = process.env[cfg.clientIdEnv];
           const clientSecret = process.env[cfg.clientSecretEnv];

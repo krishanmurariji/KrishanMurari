@@ -40,7 +40,7 @@ export const PROJECT_STATS = [
 export const AVATAR_URL = 'https://avatars.githubusercontent.com/u/144571603?v=4';
 export const RESUME_URL =
   'https://1drv.ms/b/c/0233c22d7614ece6/IQDVmW6SVwt7RLgAtEfrvYulAU2hpV47FvgAgRQ3Xs4EV5A?e=F8q1BW';
-export const EMAIL = 'mrkrishanmurariji@gmail.com';
+export const EMAIL = 'murari@krishan.is-a.dev';
 export const GITHUB_URL = 'https://github.com/krishanmurariji';
 export const LINKEDIN_URL = 'https://www.linkedin.com/in/krishansinghmurari/';
 export const GITHUB_HANDLE = 'krishanmurariji';

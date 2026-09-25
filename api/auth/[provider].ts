@@ -123,9 +123,45 @@ const PROVIDERS: Record<string, ProviderAuthConfig> = {
   },
 };
 
+// Best-effort in-memory rate limit, keyed by caller IP — see api/contact.ts
+// for the fuller reasoning (module-level Map, survives only within one warm
+// serverless instance, but still blunts a script hammering this endpoint
+// with junk `code` values).
+const rateLimitHits = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 10;
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const hits = (rateLimitHits.get(key) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (hits.length >= RATE_LIMIT_MAX) {
+    rateLimitHits.set(key, hits);
+    return false;
+  }
+  hits.push(now);
+  rateLimitHits.set(key, hits);
+  if (rateLimitHits.size > 5000) {
+    for (const [k, times] of rateLimitHits) {
+      if (times.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) rateLimitHits.delete(k);
+    }
+  }
+  return true;
+}
+
+function clientIp(req: VercelRequest): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return (first?.split(',')[0].trim()) || req.socket.remoteAddress || 'unknown';
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.status(405).end();
+    return;
+  }
+
+  if (!checkRateLimit(clientIp(req))) {
+    res.status(429).json({ error: 'Too many sign-in attempts — please try again later.' });
     return;
   }
 
@@ -160,6 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await cfg.fetchUser(accessToken);
     res.status(200).json(user);
   } catch (err) {
-    res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+    console.error(`[api/auth/${provider}] sign-in failed:`, err);
+    res.status(502).json({ error: 'Sign-in failed — please try again.' });
   }
 }

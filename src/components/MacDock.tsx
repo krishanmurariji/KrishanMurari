@@ -127,7 +127,15 @@ function DockIcon({
         onMouseLeave={handleLeave}
         aria-label={app.label}
         className="relative w-full h-full block rounded-2xl cursor-pointer disabled:cursor-default overflow-hidden"
-        style={{ userSelect: 'none', boxShadow: '0 6px 14px rgba(0,0,0,0.28)' }}
+        // A plain <button> otherwise keeps the browser's own default
+        // button-face background — invisible behind every other icon here
+        // (each is a flat SVG tile that paints its own `rect` edge-to-edge,
+        // fully covering it), but FinderIcon is a raster PNG whose own
+        // baked-in rounded corners don't exactly line up with this button's
+        // `rounded-2xl` clip. At magnified (hovered) sizes that mismatch
+        // left a sliver of the default background visible right at the
+        // corners, like a second, squarer icon ghosted behind the real one.
+        style={{ userSelect: 'none', backgroundColor: 'transparent', boxShadow: '0 6px 14px rgba(0,0,0,0.28)' }}
       >
         {/* pointer-events-none on the SVG too — some browsers treat inline SVG
             content as independently draggable even inside a non-draggable

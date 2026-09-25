@@ -136,7 +136,7 @@ function letterFrame(bodyHtml: string): string {
                       width="48"
                       height="48"
                       alt="Krishan Murari"
-                      style="display:inline-block;border-radius:999px;border:2px solid ${GOLD};"
+                      style="display:inline-block;border-radius:10px;"
                     />
                     <div style="margin-top:14px;font-family:${SERIF};font-size:12px;letter-spacing:5px;text-transform:uppercase;color:${GOLD};">
                       Krishan&nbsp;Murari

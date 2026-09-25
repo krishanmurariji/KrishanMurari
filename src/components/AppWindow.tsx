@@ -1,14 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { flushSync } from 'react-dom';
 import { toCanvas } from 'html-to-image';
 import type { DockApp, DockRect } from './MacDock';
-import ProfileApp from './apps/ProfileApp';
-import ExperienceApp from './apps/ExperienceApp';
-import EmailApp from './apps/EmailApp';
-import SpotifyApp from './apps/SpotifyApp';
-import CertificationsApp from './apps/CertificationsApp';
-import ProjectsApp from './apps/ProjectsApp';
+
+// Each app body is its own chunk, fetched only once its window is actually
+// opened (or, in practice, a beat later — see useSharedSnapshots below,
+// which mounts every one of these off-screen right after load to prewarm
+// dock-genie snapshots). Splitting these out keeps the app's *first* paint
+// (the loader + 3D scene + desktop chrome) from having to download and
+// parse every app's own dependencies up front — CertificationsApp alone
+// pulls in a second full WebGL stack (`ogl`, for Ferrofluid +
+// CircularGallery) that nothing else on the page needs.
+const ProfileApp = lazy(() => import('./apps/ProfileApp'));
+const ExperienceApp = lazy(() => import('./apps/ExperienceApp'));
+const EmailApp = lazy(() => import('./apps/EmailApp'));
+const SpotifyApp = lazy(() => import('./apps/SpotifyApp'));
+const CertificationsApp = lazy(() => import('./apps/CertificationsApp'));
+const ProjectsApp = lazy(() => import('./apps/ProjectsApp'));
 
 // One instance per running app (open or minimized) — tied to a fixed `app`
 // for its whole mounted lifetime, so switching apps never means one instance
@@ -212,7 +221,9 @@ export function WindowChrome({
       </div>
       {CustomBody ? (
         <div className="flex-1 min-h-0 bg-white">
-          <CustomBody interactive={interactive} sceneCanvasRef={sceneCanvasRef} />
+          <Suspense fallback={null}>
+            <CustomBody interactive={interactive} sceneCanvasRef={sceneCanvasRef} />
+          </Suspense>
         </div>
       ) : (
         <div className="flex-1 bg-white flex flex-col items-center justify-center gap-4 text-center px-6">

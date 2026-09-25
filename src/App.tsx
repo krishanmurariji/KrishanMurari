@@ -153,7 +153,7 @@ export default function App() {
       label: 'Email',
       icon: MacMailIcon,
       kind: 'placeholder',
-      handle: 'mrkrishanmurariji@gmail.com',
+      handle: 'murari@krishan.is-a.dev',
     },
   ], []);
 

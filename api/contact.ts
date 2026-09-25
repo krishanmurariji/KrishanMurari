@@ -34,11 +34,78 @@ function validateContactFields(body: Record<string, unknown>): { fields?: Contac
   return { fields: { email, subject, message } };
 }
 
+// Escapes the handful of characters that matter inside an HTML text node —
+// the message body is visitor-supplied and gets interpolated straight into
+// an email's HTML part, so without this a message containing e.g.
+// `<img src=x onerror=...>` would render as real markup in whatever mail
+// client opens it, not as plain text.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Cloudflare Turnstile server-side verification — the client widget
+// (EmailApp.tsx) hands back an opaque token that only proves anything once
+// checked against Cloudflare's own siteverify endpoint with the secret key.
+async function verifyTurnstile(token: string, secret: string, remoteIp?: string): Promise<boolean> {
+  try {
+    const params = new URLSearchParams({ secret, response: token });
+    if (remoteIp) params.set('remoteip', remoteIp);
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { success?: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
+// Best-effort in-memory rate limit, keyed by caller IP. This module-level
+// Map only survives as long as the current warm serverless instance — a
+// real defense against a distributed/sustained attacker needs a shared
+// store (Upstash/Vercel KV), not this — but it's free, adds no new infra
+// dependency, and still helps against a single script hammering a warm
+// instance. Turnstile above is the real gate; this is defense-in-depth.
+const rateLimitHits = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 5;
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const hits = (rateLimitHits.get(key) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (hits.length >= RATE_LIMIT_MAX) {
+    rateLimitHits.set(key, hits);
+    return false;
+  }
+  hits.push(now);
+  rateLimitHits.set(key, hits);
+  if (rateLimitHits.size > 5000) {
+    for (const [k, times] of rateLimitHits) {
+      if (times.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) rateLimitHits.delete(k);
+    }
+  }
+  return true;
+}
+
+function clientIp(req: VercelRequest): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return (first?.split(',')[0].trim()) || req.socket.remoteAddress || 'unknown';
+}
+
 // Letterhead HTML — see api/_lib/ackEmailTemplate.ts for the fuller
 // explanation of the table-based layout and the watermark's `background`-
-// attribute technique (Gmail strips `position`/`z-index` from inline
-// styles, so a table cell's own background is what actually stays behind
-// the content in every client).
+// attribute technique (Gmail/most clients strip `position`/`z-index` from
+// inline styles, so a table cell's own background is what actually stays
+// behind the content in every client).
 function buildAckEmailHtml(): string {
   return `
 <div style="background:#f4f4f6;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
@@ -105,14 +172,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const gmailUser = process.env.GMAIL_USER;
-  const gmailPass = process.env.GMAIL_APP_PASSWORD;
-  if (!gmailUser || !gmailPass) {
-    res.status(500).json({ error: 'GMAIL_USER / GMAIL_APP_PASSWORD not set' });
+  const zohoUser = process.env.ZOHO_USER;
+  const zohoPass = process.env.ZOHO_APP_PASSWORD;
+  if (!zohoUser || !zohoPass) {
+    res.status(500).json({ error: 'ZOHO_USER / ZOHO_APP_PASSWORD not set' });
+    return;
+  }
+
+  const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+  if (!turnstileSecret) {
+    res.status(500).json({ error: 'TURNSTILE_SECRET_KEY not set' });
+    return;
+  }
+
+  const ip = clientIp(req);
+  if (!checkRateLimit(ip)) {
+    res.status(429).json({ error: 'Too many messages sent — please try again later.' });
     return;
   }
 
   const body = (req.body ?? {}) as Record<string, unknown>;
+
+  const turnstileToken = typeof body.turnstileToken === 'string' ? body.turnstileToken : '';
+  if (!turnstileToken || !(await verifyTurnstile(turnstileToken, turnstileSecret, ip))) {
+    res.status(400).json({ error: 'CAPTCHA verification failed — please try again.' });
+    return;
+  }
+
   const { fields, error } = validateContactFields(body);
   if (!fields) {
     res.status(400).json({ error });
@@ -123,23 +209,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { email, subject, message } = fields;
 
   try {
+    // Zoho Mail SMTP — smtp.zoho.com on 465 (implicit TLS). A regional Zoho
+    // data-center account (zoho.eu, zoho.in, etc.) needs its region-specific
+    // host instead; this assumes the default zoho.com account.
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: gmailUser, pass: gmailPass },
+      host: 'smtp.zoho.com',
+      port: 465,
+      secure: true,
+      auth: { user: zohoUser, pass: zohoPass },
     });
 
+    const safeEmail = escapeHtml(email);
     await transporter.sendMail({
-      from: `"Portfolio Contact Form" <${gmailUser}>`,
-      to: gmailUser,
+      from: `"Portfolio Contact Form" <${zohoUser}>`,
+      to: zohoUser,
       replyTo: email,
       subject: `[Portfolio] ${subject}`,
       text: `From: ${email}\n\n${message}`,
-      html: `<p><strong>From:</strong> ${email}</p><p>${message.replace(/\n/g, '<br>')}</p>`,
+      html: `<p><strong>From:</strong> ${safeEmail}</p><p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>`,
     });
 
     try {
       await transporter.sendMail({
-        from: `"Krishan Murari" <${gmailUser}>`,
+        from: `"Krishan Murari" <${zohoUser}>`,
         to: email,
         subject: `Re: ${subject}`,
         text: `Hi,\n\nThanks for reaching out — I've received your message and will connect with you soon.\n\n— Krishan\n\nThis is an automated message from krishan.is-a.dev — please don't reply directly to this email.`,
@@ -155,6 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    console.error('[api/contact] send failed:', err);
+    res.status(500).json({ error: 'Could not send your message — please try again later.' });
   }
 }

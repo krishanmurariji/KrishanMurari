@@ -339,12 +339,12 @@ function FooterBar({ isLight }: { isLight?: boolean }) {
         ))}
         <div className={`flex-1 h-px ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
         <a
-          href="mailto:mrkrishanmurariji@gmail.com"
+          href="mailto:murari@krishan.is-a.dev"
           className={`text-[10px] font-mono tracking-widest transition-opacity hover:opacity-100 ${
             isLight ? 'text-black/50 hover:text-black/90' : 'text-white/40 hover:text-white/90'
           }`}
         >
-          mrkrishanmurariji@gmail.com
+          murari@krishan.is-a.dev
         </a>
       </div>
 

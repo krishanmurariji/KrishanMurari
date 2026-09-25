@@ -13,7 +13,7 @@ export default function Footer({ isLight }: { isLight?: boolean }) {
         </div>
         
         <a 
-          href="mailto:mrkrishanmurariji@gmail.com"
+          href="mailto:murari@krishan.is-a.dev"
           className={`px-6 py-2 text-[11px] font-bold uppercase tracking-widest rounded-full cursor-pointer transition-colors ${isLight ? 'bg-black text-white hover:bg-zinc-800 shadow-[0_4px_12px_rgba(0,0,0,0.1)]' : 'bg-white text-black hover:bg-zinc-200'}`}
         >
           Hire Me

@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import CircularGallery from '../CircularGallery';
 import Ferrofluid from '../Ferrofluid';
+import { usePrefersReducedMotion } from '../../lib/useReducedMotion';
 
 // One entry per file actually sitting in public/certificates/ — public/
 // assets aren't reachable through Vite's import.meta.glob (that only sees
@@ -80,6 +81,7 @@ export default function CertificationsApp({ interactive }: { interactive?: boole
     const id = window.setTimeout(() => setShowGallery(true), 1000);
     return () => window.clearTimeout(id);
   }, []);
+  const reducedMotion = usePrefersReducedMotion();
 
   // AppWindow renders every app body once, hidden, purely to snapshot it for
   // the dock's genie zoom (see useSharedSnapshots in AppWindow.tsx) — that
@@ -99,6 +101,7 @@ export default function CertificationsApp({ interactive }: { interactive?: boole
     <div className="relative h-full w-full" style={{ background: '#0c0c10' }}>
       <div className="absolute inset-0 z-0">
         <Ferrofluid
+          paused={reducedMotion}
           colors={['#ffffff', '#ffffff', '#ffffff']}
           speed={0.5}
           scale={1.6}

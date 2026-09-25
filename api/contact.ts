@@ -101,49 +101,58 @@ function clientIp(req: VercelRequest): string {
   return (first?.split(',')[0].trim()) || req.socket.remoteAddress || 'unknown';
 }
 
-// Letterhead HTML — see api/_lib/ackEmailTemplate.ts for the fuller
-// explanation of the table-based layout and the watermark's `background`-
-// attribute technique (Gmail/most clients strip `position`/`z-index` from
-// inline styles, so a table cell's own background is what actually stays
-// behind the content in every client).
-function buildAckEmailHtml(): string {
+// The two outgoing emails' HTML — see api/_lib/ackEmailTemplate.ts for the
+// fuller explanation of the table-based layout, the watermark's
+// `background`-attribute technique (Gmail/most clients strip
+// `position`/`z-index` from inline styles, so a table cell's own background
+// is what actually stays behind the content in every client), and why
+// `background-size` on it is best-effort (Outlook desktop ignores it
+// entirely and falls back to the image's natural size).
+const CURSIVE = `'Segoe Script', 'Brush Script MT', 'Lucida Handwriting', cursive`;
+const SERIF = `Georgia, 'Times New Roman', serif`;
+const INK = '#4a3420';
+const GOLD = '#b8935a';
+const PARCHMENT = '#fdf8ee';
+const PAGE_BG = '#efe6d2';
+
+function letterFrame(bodyHtml: string): string {
   return `
-<div style="background:#f4f4f6;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #ececec;border-radius:10px;">
+<div style="background:${PAGE_BG};padding:40px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;">
     <tr>
-      <td
-        background="cid:watermark-logo"
-        bgcolor="#ffffff"
-        style="background-color:#ffffff;background-image:url('cid:watermark-logo');background-repeat:no-repeat;background-position:center;padding:0;"
-      >
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <td style="padding:5px;background:${GOLD};border-radius:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PARCHMENT};border-radius:5px;">
           <tr>
-            <td style="padding:24px 32px;border-bottom:2px solid #1c1c1e;">
-              <table role="presentation" cellpadding="0" cellspacing="0">
+            <td
+              background="cid:watermark-logo"
+              bgcolor="${PARCHMENT}"
+              style="background-color:${PARCHMENT};background-image:url('cid:watermark-logo');background-repeat:no-repeat;background-position:center 60%;background-size:320px 320px;padding:0;"
+            >
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="vertical-align:middle;padding-right:12px;">
-                    <img src="cid:letterhead-logo" width="40" height="40" alt="Krishan Murari" style="display:block;border-radius:9px;" />
+                  <td style="padding:40px 48px 6px;text-align:center;">
+                    <img
+                      src="cid:letterhead-logo"
+                      width="48"
+                      height="48"
+                      alt="Krishan Murari"
+                      style="display:inline-block;border-radius:999px;border:2px solid ${GOLD};"
+                    />
+                    <div style="margin-top:14px;font-family:${SERIF};font-size:12px;letter-spacing:5px;text-transform:uppercase;color:${GOLD};">
+                      Krishan&nbsp;Murari
+                    </div>
+                    <div style="margin:12px auto 0;width:64px;height:1px;background:${GOLD};"></div>
                   </td>
-                  <td style="vertical-align:middle;">
-                    <div style="font-size:16px;font-weight:700;color:#1c1c1e;line-height:1.3;">Krishan Murari</div>
-                    <div style="font-size:12px;color:#8a8a8e;line-height:1.3;">krishan.is-a.dev</div>
+                </tr>
+                ${bodyHtml}
+                <tr>
+                  <td style="padding:18px 32px 28px;border-top:1px solid ${GOLD};text-align:center;">
+                    <div style="font-family:${SERIF};font-size:11px;letter-spacing:1px;color:${GOLD};">
+                      krishan.is-a.dev &nbsp;&middot;&nbsp; an automated correspondence &mdash; please don&rsquo;t reply directly to this email
+                    </div>
                   </td>
                 </tr>
               </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;color:#1c1c1e;font-size:14px;line-height:1.65;">
-              <p style="margin:0 0 12px;">Hi,</p>
-              <p style="margin:0;">
-                Thanks for reaching out — I&rsquo;ve received your message and will get back to you soon.
-              </p>
-              <p style="margin:20px 0 0;">&mdash; Krishan</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:16px 32px;background:#f7f7f8;border-top:1px solid #ececec;border-radius:0 0 10px 10px;text-align:center;font-size:11px;color:#9a9a9e;">
-              This is an automated message from krishan.is-a.dev — please don&rsquo;t reply directly to this email.
             </td>
           </tr>
         </table>
@@ -151,6 +160,41 @@ function buildAckEmailHtml(): string {
     </tr>
   </table>
 </div>`;
+}
+
+function buildAckEmailHtml(): string {
+  return letterFrame(`
+                <tr>
+                  <td style="padding:10px 54px 6px;font-family:${SERIF};font-size:18px;line-height:1.9;color:${INK};">
+                    <p style="margin:0 0 24px;font-family:${CURSIVE};font-weight:400;font-size:30px;color:${GOLD};">My Dear Friend,</p>
+                    <p style="margin:0 0 20px;">
+                      Thank you most kindly for taking the time to write to me. Your letter has arrived safely upon my desk,
+                      and I shall give it my full and careful attention, sending my reply to you personally before long.
+                    </p>
+                    <p style="margin:0;">Until then, I remain</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 54px 36px;text-align:right;">
+                    <div style="font-family:${SERIF};font-size:16px;color:${INK};">Yours most sincerely,</div>
+                    <div style="margin-top:8px;font-family:${CURSIVE};font-size:38px;color:${GOLD};">Krishan</div>
+                  </td>
+                </tr>`);
+}
+
+function buildNotificationEmailHtml(fields: { email: string; subject: string; message: string }): string {
+  return letterFrame(`
+                <tr>
+                  <td style="padding:10px 54px 6px;font-family:${SERIF};font-size:18px;line-height:1.85;color:${INK};">
+                    <p style="margin:0 0 22px;font-family:${CURSIVE};font-weight:400;font-size:30px;color:${GOLD};">A Letter Has Arrived,</p>
+                    <p style="margin:0 0 4px;"><strong>From:</strong>&nbsp;${fields.email}</p>
+                    <p style="margin:0 0 20px;"><strong>Subject:</strong>&nbsp;${fields.subject}</p>
+                    <div style="margin:0 0 22px;padding:20px 24px;background:${PAGE_BG};border-left:3px solid ${GOLD};font-style:italic;">
+                      ${fields.message}
+                    </div>
+                    <p style="margin:0;font-size:14px;color:${GOLD};">Received via the correspondence form on krishan.is-a.dev.</p>
+                  </td>
+                </tr>`);
 }
 
 // The letterhead/watermark logos as live URLs on this same deployment
@@ -220,14 +264,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { user: zohoUser, pass: zohoPass },
     });
 
-    const safeEmail = escapeHtml(email);
+    const letterAttachments = [
+      { filename: 'logo.png', path: `${origin}/android-chrome-512x512.png`, cid: 'letterhead-logo' },
+      { filename: 'watermark-logo.png', path: `${origin}/watermark-logo.png`, cid: 'watermark-logo' },
+    ];
+
     await transporter.sendMail({
       from: `"Portfolio Contact Form" <${zohoUser}>`,
       to: zohoUser,
       replyTo: email,
       subject: `[Portfolio] ${subject}`,
       text: `From: ${email}\n\n${message}`,
-      html: `<p><strong>From:</strong> ${safeEmail}</p><p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>`,
+      html: buildNotificationEmailHtml({
+        email: escapeHtml(email),
+        subject: escapeHtml(subject),
+        message: escapeHtml(message).replace(/\n/g, '<br>'),
+      }),
+      attachments: letterAttachments,
     });
 
     try {
@@ -235,12 +288,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         from: `"Krishan Murari" <${zohoUser}>`,
         to: email,
         subject: `Re: ${subject}`,
-        text: `Hi,\n\nThanks for reaching out — I've received your message and will connect with you soon.\n\n— Krishan\n\nThis is an automated message from krishan.is-a.dev — please don't reply directly to this email.`,
+        text: `My dear friend,\n\nThank you most kindly for taking the time to write to me. Your letter has arrived safely upon my desk, and I shall give it my full and careful attention, sending my reply to you personally before long.\n\nUntil then, I remain,\nYours most sincerely,\nKrishan\n\nThis is an automated message from krishan.is-a.dev — please don't reply directly to this email.`,
         html: buildAckEmailHtml(),
-        attachments: [
-          { filename: 'logo.png', path: `${origin}/android-chrome-512x512.png`, cid: 'letterhead-logo' },
-          { filename: 'watermark-logo.png', path: `${origin}/watermark-logo.png`, cid: 'watermark-logo' },
-        ],
+        attachments: letterAttachments,
       });
     } catch (autoReplyErr) {
       console.error('[api/contact] auto-reply to visitor failed:', autoReplyErr);

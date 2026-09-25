@@ -7,7 +7,7 @@
 // needs to live inside the api/ directory tree, not just anywhere in the
 // repo.
 import nodemailer from 'nodemailer';
-import { buildAckEmailHtml } from './ackEmailTemplate';
+import { buildAckEmailHtml, buildNotificationEmailHtml } from './ackEmailTemplate';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -117,14 +117,23 @@ export async function sendContactEmail(fields: ContactFields, env: ContactEnv): 
     auth: { user: env.zohoUser, pass: env.zohoPass },
   });
 
-  const safeEmail = escapeHtml(email);
+  const letterAttachments = [
+    { filename: 'logo.png', path: env.letterheadLogoPath, cid: 'letterhead-logo' },
+    { filename: 'watermark-logo.png', path: env.watermarkLogoPath, cid: 'watermark-logo' },
+  ];
+
   await transporter.sendMail({
     from: `"Portfolio Contact Form" <${env.zohoUser}>`,
     to: env.zohoUser,
     replyTo: email,
     subject: `[Portfolio] ${subject}`,
     text: `From: ${email}\n\n${message}`,
-    html: `<p><strong>From:</strong> ${safeEmail}</p><p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>`,
+    html: buildNotificationEmailHtml({
+      email: escapeHtml(email),
+      subject: escapeHtml(subject),
+      message: escapeHtml(message).replace(/\n/g, '<br>'),
+    }),
+    attachments: letterAttachments,
   });
 
   // Auto-reply to the visitor, confirming receipt — best-effort: its own
@@ -136,12 +145,9 @@ export async function sendContactEmail(fields: ContactFields, env: ContactEnv): 
       from: `"Krishan Murari" <${env.zohoUser}>`,
       to: email,
       subject: `Re: ${subject}`,
-      text: `Hi,\n\nThanks for reaching out — I've received your message and will connect with you soon.\n\n— Krishan\n\nThis is an automated message from krishan.is-a.dev — please don't reply directly to this email.`,
+      text: `My dear friend,\n\nThank you most kindly for taking the time to write to me. Your letter has arrived safely upon my desk, and I shall give it my full and careful attention, sending my reply to you personally before long.\n\nUntil then, I remain,\nYours most sincerely,\nKrishan\n\nThis is an automated message from krishan.is-a.dev — please don't reply directly to this email.`,
       html: buildAckEmailHtml(),
-      attachments: [
-        { filename: 'logo.png', path: env.letterheadLogoPath, cid: 'letterhead-logo' },
-        { filename: 'watermark-logo.png', path: env.watermarkLogoPath, cid: 'watermark-logo' },
-      ],
+      attachments: letterAttachments,
     });
   } catch (autoReplyErr) {
     console.error('[contact] auto-reply to visitor failed:', autoReplyErr);

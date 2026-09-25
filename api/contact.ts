@@ -209,11 +209,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { email, subject, message } = fields;
 
   try {
-    // Zoho Mail SMTP — smtp.zoho.com on 465 (implicit TLS). A regional Zoho
-    // data-center account (zoho.eu, zoho.in, etc.) needs its region-specific
-    // host instead; this assumes the default zoho.com account.
+    // Zoho Mail SMTP — smtp.zoho.in on 465 (implicit TLS). This account
+    // lives on Zoho's India data center (zoho.in), not the default
+    // zoho.com — a regional account's SMTP host must match its own DC or
+    // auth fails.
     const transporter = nodemailer.createTransport({
-      host: 'smtp.zoho.com',
+      host: 'smtp.zoho.in',
       port: 465,
       secure: true,
       auth: { user: zohoUser, pass: zohoPass },

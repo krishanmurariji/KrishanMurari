@@ -107,11 +107,11 @@ export function validateContactFields(body: Record<string, unknown>): { fields?:
 
 export async function sendContactEmail(fields: ContactFields, env: ContactEnv): Promise<void> {
   const { email, subject, message } = fields;
-  // Zoho Mail SMTP — smtp.zoho.com on 465 (implicit TLS). Zoho's regional
-  // data-center accounts (zoho.eu, zoho.in, etc.) use a region-specific host
-  // instead (smtp.zoho.eu, ...); this assumes the default zoho.com account.
+  // Zoho Mail SMTP — smtp.zoho.in on 465 (implicit TLS). This account lives
+  // on Zoho's India data center (zoho.in), not the default zoho.com — a
+  // regional account's SMTP host must match its own DC or auth fails.
   const transporter = nodemailer.createTransport({
-    host: 'smtp.zoho.com',
+    host: 'smtp.zoho.in',
     port: 465,
     secure: true,
     auth: { user: env.zohoUser, pass: env.zohoPass },

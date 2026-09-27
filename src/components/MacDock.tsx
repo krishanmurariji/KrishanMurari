@@ -132,10 +132,14 @@ function DockIcon({
         // (each is a flat SVG tile that paints its own `rect` edge-to-edge,
         // fully covering it), but FinderIcon is a raster PNG whose own
         // baked-in rounded corners don't exactly line up with this button's
-        // `rounded-2xl` clip. At magnified (hovered) sizes that mismatch
-        // left a sliver of the default background visible right at the
-        // corners, like a second, squarer icon ghosted behind the real one.
-        style={{ userSelect: 'none', backgroundColor: 'transparent', boxShadow: '0 6px 14px rgba(0,0,0,0.28)' }}
+        // `rounded-2xl` clip, letting that default background peek through
+        // at the corners. No `boxShadow` here either — dock-item's magnify
+        // engine scales this whole button up via a CSS transform on hover,
+        // which scales a fixed-px box-shadow's blur/offset right along with
+        // it, turning a subtle shadow at rest into an oversized, clearly
+        // rounded-rect halo trailing behind the icon once magnified —
+        // visually indistinguishable from a second icon ghosted behind it.
+        style={{ userSelect: 'none', backgroundColor: 'transparent' }}
       >
         {/* pointer-events-none on the SVG too — some browsers treat inline SVG
             content as independently draggable even inside a non-draggable

@@ -115,6 +115,10 @@ const GOLD = '#b8935a';
 const PARCHMENT = '#fdf8ee';
 const PAGE_BG = '#efe6d2';
 
+// The shared letter frame — gold double border, small circular wax-seal
+// crest, the faint watermark behind everything, and a gold-rule footer.
+// `bodyHtml` is whatever sits between the crest and the footer; both
+// templates below only differ in that middle section.
 function letterFrame(bodyHtml: string): string {
   return `
 <div style="background:${PAGE_BG};padding:40px 16px;">

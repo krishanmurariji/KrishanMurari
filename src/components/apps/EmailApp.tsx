@@ -148,7 +148,7 @@ const fieldVariants = {
 // clears and goes back to idle, ready for another message.
 const SENT_HOLD_MS = 2400;
 
-export default function EmailApp() {
+export default function EmailApp({ interactive }: { interactive?: boolean }) {
   // Prefixes every field id below — AppWindow's useSharedSnapshots mounts a
   // second, hidden copy of this whole component off-screen to rasterize the
   // dock's genie-open snapshot, so a hardcoded "email"/"subject"/"message"
@@ -331,7 +331,15 @@ export default function EmailApp() {
                 )}
               </AnimatePresence>
 
-              {TURNSTILE_SITE_KEY && (
+              {/* Skipped for AppWindow's hidden snapshot copy of this app
+                  (see useSharedSnapshots in AppWindow.tsx, which mounts one
+                  off-screen purely to rasterize the dock's genie preview) —
+                  that copy is never submitted, so rendering a real Turnstile
+                  widget there just meant two separate widget instances
+                  loading on every page visit instead of one, wasting a
+                  challenge render and producing the widget's own
+                  cross-origin postMessage console warning between them. */}
+              {interactive && TURNSTILE_SITE_KEY && (
                 <motion.div custom={3} variants={fieldVariants} initial="hidden" animate="show" className="flex justify-center">
                   <Turnstile
                     ref={turnstileRef}

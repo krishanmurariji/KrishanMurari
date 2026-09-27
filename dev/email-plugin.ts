@@ -1,12 +1,11 @@
 // Dev-only Vite middleware for the Email window's contact form
 // (src/components/apps/EmailApp.tsx) — sends the message via Zoho Mail SMTP
 // using nodemailer, after verifying a Cloudflare Turnstile token and a
-// basic per-IP rate limit (see api/_lib/send-contact-email.ts). Lives here
-// rather than client code for the same reason as oauth-plugin.ts: it needs
-// real secrets (the Zoho App Password, the Turnstile secret key), which
-// must never ship to the browser. This plugin's `configureServer` hook only
-// runs under `vite dev`/`vite preview`, never bundled into the production
-// build.
+// basic per-IP rate limit (see api/_lib/security.ts). Lives here rather
+// than client code for the same reason as oauth-plugin.ts: it needs real
+// secrets (the Zoho App Password, the Turnstile secret key), which must
+// never ship to the browser. This plugin's `configureServer` hook only runs
+// under `vite dev`/`vite preview`, never bundled into the production build.
 //
 // The real deploy target is Vercel — see api/contact.ts, which ports this
 // same send logic (shared via api/_lib/send-contact-email.ts, so there's
@@ -17,7 +16,11 @@
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { Plugin } from 'vite';
-import { sendContactEmail, validateContactFields, verifyTurnstile, checkRateLimit } from '../api/_lib/send-contact-email';
+import { sendContactEmail, validateContactFields } from '../api/_lib/send-contact-email';
+import { verifyTurnstile, checkRateLimit } from '../api/_lib/security';
+
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
 // Both embedded via cid, not a hosted URL — this needs to render correctly
 // with no public deploy and no internet-reachable image host. The header
@@ -79,7 +82,7 @@ export function emailDevPlugin(): Plugin {
         }
 
         const ip = (req.socket.remoteAddress || 'unknown').replace('::ffff:', '');
-        if (!checkRateLimit(ip)) {
+        if (!checkRateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
           sendJson(429, { error: 'Too many messages sent — please try again later.' });
           return;
         }

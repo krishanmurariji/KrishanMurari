@@ -4,6 +4,7 @@ import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 import {oauthDevPlugin} from './dev/oauth-plugin';
 import {emailDevPlugin} from './dev/email-plugin';
+import {chatDevPlugin} from './dev/chat-plugin';
 
 export default defineConfig(({mode}) => {
   // loadEnv (not dotenv) so this picks up .env.local the same way Vite
@@ -20,7 +21,7 @@ export default defineConfig(({mode}) => {
   }
 
   return {
-    plugins: [react(), tailwindcss(), oauthDevPlugin(), emailDevPlugin()],
+    plugins: [react(), tailwindcss(), oauthDevPlugin(), emailDevPlugin(), chatDevPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

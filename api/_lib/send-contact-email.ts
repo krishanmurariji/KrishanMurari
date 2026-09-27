@@ -38,58 +38,6 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// Cloudflare Turnstile server-side verification — the client widget
-// (EmailApp.tsx) hands back an opaque token that only proves anything once
-// it's checked against Cloudflare's own siteverify endpoint with the secret
-// key; trusting the token itself would let anyone skip the widget entirely
-// and just send a fixed string.
-export async function verifyTurnstile(token: string, secret: string, remoteIp?: string): Promise<boolean> {
-  try {
-    const params = new URLSearchParams({ secret, response: token });
-    if (remoteIp) params.set('remoteip', remoteIp);
-    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params,
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { success?: boolean };
-    return data.success === true;
-  } catch {
-    return false;
-  }
-}
-
-// Best-effort in-memory rate limit, keyed by caller IP. This module-level
-// Map only lives as long as the current process — a real defense against a
-// distributed/sustained attacker needs a shared store (Upstash/Vercel KV),
-// not this — but it's free, adds no new infra dependency, and still helps
-// against a single script hammering the endpoint against one warm
-// serverless instance or the long-lived dev server. Turnstile above is the
-// real gate; this is defense-in-depth on top of it.
-const rateLimitHits = new Map<string, number[]>();
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
-const RATE_LIMIT_MAX = 5;
-
-export function checkRateLimit(key: string, max = RATE_LIMIT_MAX, windowMs = RATE_LIMIT_WINDOW_MS): boolean {
-  const now = Date.now();
-  const hits = (rateLimitHits.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (hits.length >= max) {
-    rateLimitHits.set(key, hits);
-    return false;
-  }
-  hits.push(now);
-  rateLimitHits.set(key, hits);
-  // Opportunistic cleanup so this Map can't grow unbounded across a
-  // long-lived process (the dev server) as distinct IPs come and go.
-  if (rateLimitHits.size > 5000) {
-    for (const [k, times] of rateLimitHits) {
-      if (times.every((t) => now - t >= windowMs)) rateLimitHits.delete(k);
-    }
-  }
-  return true;
-}
-
 export function validateContactFields(body: Record<string, unknown>): { fields?: ContactFields; error?: string } {
   // Re-validated here even though EmailApp already checks these —
   // client-side validation only protects the honest visitor typing into

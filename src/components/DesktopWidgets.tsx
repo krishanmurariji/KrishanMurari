@@ -19,6 +19,7 @@ import { cn } from '../lib/utils';
 import { useYouTubePlayer } from '../lib/youtube-player';
 import { GlassBackdrop } from './GlassBackdrop';
 import { NAME, BIO, EMAIL, MailGlyph } from './apps/profile/shared';
+import ChatAssistant from './ChatAssistant';
 
 // Below this, each corner group shrinks in place via a plain transform
 // instead of resizing individually — see the render below for how
@@ -793,6 +794,7 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
   const livePhotos = PHOTOS.filter((p) => !failedUrls.includes(p.url));
   const [index, setIndex] = useState(0);
   const [hovered, setHovered] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setIndex((i) => (i + 1) % Math.max(livePhotos.length, 1)), PHOTO_INTERVAL_MS);
@@ -897,8 +899,9 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
               <SocialIconButton key={label} label={label} href={href} Icon={Icon} brand={brand} isLight={isLight} />
             ))}
           </div>
-          <a
-            href={`mailto:${EMAIL}`}
+          <button
+            type="button"
+            onClick={() => setChatOpen(true)}
             className={cn(
               'rounded-full px-2.5 py-1.5 text-[0.65rem] font-medium transition-colors',
               isLight
@@ -906,10 +909,12 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
                 : 'bg-white/15 text-white hover:bg-white hover:!text-[#423f3a]'
             )}
           >
-            Contact Me
-          </a>
+            Chat Now
+          </button>
         </div>
       </div>
+
+      <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

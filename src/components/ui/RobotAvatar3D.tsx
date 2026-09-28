@@ -54,15 +54,15 @@ function Eye({
   sparkleMat: THREE.Material;
 }) {
   return (
-    <group ref={eyeRef} position={[x, 0.02, 0.46]}>
+    <group ref={eyeRef} position={[x, 0.03, 0.5]}>
       <mesh material={eyeMat}>
-        <sphereGeometry args={[0.115, 20, 20]} />
+        <sphereGeometry args={[0.09, 20, 20]} />
       </mesh>
-      <mesh position={[0, -0.015, 0.09]} material={pupilMat}>
-        <sphereGeometry args={[0.062, 16, 16]} />
+      <mesh position={[0, -0.012, 0.07]} material={pupilMat}>
+        <sphereGeometry args={[0.05, 16, 16]} />
       </mesh>
-      <mesh position={[0.025, 0.03, 0.135]} material={sparkleMat}>
-        <sphereGeometry args={[0.02, 8, 8]} />
+      <mesh position={[0.02, 0.024, 0.105]} material={sparkleMat}>
+        <sphereGeometry args={[0.016, 8, 8]} />
       </mesh>
     </group>
   );
@@ -94,10 +94,10 @@ function Bot({ reducedMotion }: { reducedMotion: boolean }) {
     () => new THREE.MeshStandardMaterial({ color: BLUSH_COLOR, roughness: 0.6, transparent: true, opacity: 0.55 }),
     []
   );
-  // A muted mid-tone rather than the eyes' bright glow — the previous
-  // version reused eyeMat for the mouth too, and at this size a big glowing
-  // pale arc read as an open, toothy grin instead of a smile line.
-  const mouthMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#4a5568', roughness: 0.4 }), []);
+  // Plain white rather than the eyes' emissive glow — a bright but
+  // non-glowing smile line reads cleanly against the dark screen without
+  // the "open toothy grin" look a big glowing arc gave the first pass.
+  const mouthMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.35 }), []);
 
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
@@ -168,14 +168,15 @@ function Bot({ reducedMotion }: { reducedMotion: boolean }) {
           more angular box. */}
       <RoundedBox args={[1.2, 1.15, 0.95]} radius={0.46} smoothness={5} material={headMat} />
 
-      {/* Face screen — a big, almost-pill-shaped panel (most of the
-          reference's own face is screen, not bezel), plus a slightly larger
-          near-black backing to give the screen a subtle raised bezel. */}
-      <RoundedBox args={[0.98, 0.72, 0.06]} radius={0.32} smoothness={5} position={[0, -0.02, 0.46]} material={screenMat} />
-      <RoundedBox args={[0.9, 0.64, 0.08]} radius={0.28} smoothness={5} position={[0, -0.02, 0.49]} material={screenMat} />
+      {/* Face screen — sized well inside the head so a good amount of white
+          head shows all the way around it as a thin border, rather than the
+          screen nearly matching the head's own silhouette (which read as a
+          thick black ring wrapping the whole face instead of a face
+          screen). */}
+      <RoundedBox args={[0.66, 0.46, 0.06]} radius={0.18} smoothness={5} position={[0, -0.02, 0.47]} material={screenMat} />
 
-      <Eye eyeRef={leftEye} x={-0.22} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
-      <Eye eyeRef={rightEye} x={0.22} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
+      <Eye eyeRef={leftEye} x={-0.16} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
+      <Eye eyeRef={rightEye} x={0.16} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
 
       {/* Blush — two soft pink discs just below/outside the eyes. */}
       <mesh position={[-0.42, -0.14, 0.45]} rotation={[0, 0.5, 0]} material={blushMat}>
@@ -194,8 +195,8 @@ function Bot({ reducedMotion }: { reducedMotion: boolean }) {
           exactly there regardless of how wide `arc` is (a fixed π rotation
           only happens to center a full half-circle; any narrower arc needs
           this general form or it comes out lopsided). */}
-      <mesh ref={mouth} position={[0, -0.16, 0.52]} rotation={[0, 0, (3 * Math.PI) / 2 - MOUTH_ARC / 2]} material={mouthMat}>
-        <torusGeometry args={[0.1, 0.016, 8, 24, MOUTH_ARC]} />
+      <mesh ref={mouth} position={[0, -0.13, 0.53]} rotation={[0, 0, (3 * Math.PI) / 2 - MOUTH_ARC / 2]} material={mouthMat}>
+        <torusGeometry args={[0.075, 0.014, 8, 24, MOUTH_ARC]} />
       </mesh>
     </group>
   );

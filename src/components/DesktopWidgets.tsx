@@ -20,6 +20,7 @@ import { useYouTubePlayer } from '../lib/youtube-player';
 import { GlassBackdrop } from './GlassBackdrop';
 import { NAME, BIO, EMAIL, MailGlyph } from './apps/profile/shared';
 import ChatAssistant from './ChatAssistant';
+import RobotAvatar3D from './ui/RobotAvatar3D';
 
 // Below this, each corner group shrinks in place via a plain transform
 // instead of resizing individually — see the render below for how
@@ -903,12 +904,13 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
             type="button"
             onClick={() => setChatOpen(true)}
             className={cn(
-              'rounded-full px-2.5 py-1.5 text-[0.65rem] font-medium transition-colors',
+              'flex items-center gap-1 rounded-full py-1 pl-1 pr-2.5 text-[0.65rem] font-medium transition-colors',
               isLight
                 ? 'bg-black/10 text-black hover:bg-black hover:!text-white'
                 : 'bg-white/15 text-white hover:bg-white hover:!text-[#423f3a]'
             )}
           >
+            <RobotAvatar3D className="h-5 w-5 shrink-0" />
             Chat Now
           </button>
         </div>

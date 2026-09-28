@@ -98,7 +98,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   const [error, setError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
-  const [expression, setExpression] = useState<BotExpression>('normal');
+  const [angryFlash, setAngryFlash] = useState(false);
   const turnstileRef = useRef<TurnstileHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -110,18 +110,32 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   const isFirstMessage = messages.length === 0;
   const speechSupported = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
+  // Om's expression is derived from what's actually happening rather than
+  // set ad hoc all over the component: a validation/security flash always
+  // wins, then "waiting on the API", then the big welcome grin for the
+  // not-yet-started conversation, and otherwise the default smile.
+  // Om's expression is derived from what's actually happening rather than
+  // set ad hoc all over the component: a validation/security flash always
+  // wins, then "waiting on the API", then the big welcome grin for the
+  // not-yet-started conversation, and otherwise the default smile.
+  const expression: BotExpression = angryFlash ? 'angry' : sending ? 'thinking' : !hasStarted ? 'happy' : 'normal';
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
-  // Drives the bot's move from centered-and-big to docked-top-left via real
-  // top/left/width/height numbers rather than framer motion's `layout` prop
-  // — `layout` fakes a smooth resize with a temporary CSS transform: scale(),
-  // and applying that to a box containing a react-three-fiber <Canvas>
-  // corrupted the WebGL render into a cropped mess (confirmed live: a plain
-  // width/height style animation resizes the same canvas cleanly, so the
-  // transform step specifically is what breaks it). Recomputed on open,
-  // whenever the hero/docked state flips, and on window resize.
+  // Drives the bot's move from centered-and-big to a docked header-row icon
+  // via real top/left/width/height numbers rather than framer motion's
+  // `layout` prop — `layout` fakes a smooth resize with a temporary CSS
+  // transform: scale(), and applying that to a box containing a
+  // react-three-fiber <Canvas> corrupted the WebGL render into a cropped
+  // mess (confirmed live: a plain width/height style animation resizes the
+  // same canvas cleanly, so the transform step specifically is what breaks
+  // it). Recomputed on open, whenever the hero/docked state flips, and on
+  // window resize. Once docked, the bot sits in a header strip at the very
+  // top of the panel (not floating over the transcript) — the close button
+  // and the transcript's own top offset are both derived from this same
+  // rect so all three stay visually aligned as one header row.
   useEffect(() => {
     if (!open) return;
     const computeRect = () => {
@@ -129,9 +143,9 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
       if (!el) return;
       const { width, height } = el.getBoundingClientRect();
       if (hasStarted) {
-        const size = width < 640 ? 64 : width < 768 ? 80 : 96;
-        const left = width < 640 ? 24 : 32;
-        setBotRect({ top: 32, left, size });
+        const size = width < 640 ? 56 : width < 768 ? 64 : 72;
+        const left = width < 640 ? 20 : 28;
+        setBotRect({ top: 20, left, size });
       } else {
         const size = width < 640 ? 144 : 192;
         setBotRect({ top: height * 0.38 - size / 2, left: width / 2 - size / 2, size });
@@ -142,6 +156,14 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     return () => window.removeEventListener('resize', computeRect);
   }, [open, hasStarted]);
 
+  // The docked bot's header row: the transcript starts below it (never
+  // beside it, so messages stay flush left instead of squeezed right of a
+  // floating icon), and the close button's vertical center is pinned to the
+  // bot's, so it visually reads as one header rather than two unrelated
+  // floating controls.
+  const headerHeight = hasStarted ? botRect.top + botRect.size + 16 : 0;
+  const closeTop = hasStarted ? botRect.top + botRect.size / 2 - 18 : 20;
+
   // Stop any in-progress dictation the moment the panel closes, rather than
   // leaving the mic listening in the background after the UI it feeds is
   // gone.
@@ -149,7 +171,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     if (!open) {
       recognitionRef.current?.stop();
       setListening(false);
-      setExpression('normal');
+      setAngryFlash(false);
       if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
     }
   }, [open]);
@@ -164,10 +186,10 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   // expression plus a matching sound, easing back to normal on its own
   // shortly after (or as soon as the visitor starts typing again).
   const flashAngry = () => {
-    setExpression('angry');
+    setAngryFlash(true);
     playAngrySound();
     if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
-    angryTimeoutRef.current = window.setTimeout(() => setExpression('normal'), ANGRY_HOLD_MS);
+    angryTimeoutRef.current = window.setTimeout(() => setAngryFlash(false), ANGRY_HOLD_MS);
   };
 
   const handleSend = async () => {
@@ -204,7 +226,6 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     setInput('');
     setSending(true);
     setError(null);
-    setExpression('thinking');
     playThinkingSound();
 
     try {
@@ -219,7 +240,6 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Something went wrong — try again.');
       setMessages((prev) => [...prev, { role: 'model', text: data.reply as string }]);
-      setExpression('normal');
       playReplySound();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong — try again.');
@@ -299,15 +319,20 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
               style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0))' }}
             />
 
-            {/* No header bar — just a floating close control. */}
-            <button
+            {/* No dedicated header bar in the JSX — but once the bot docks
+                to the top-left, this close control tracks its vertical
+                center so the two read as one header row together. */}
+            <motion.button
               type="button"
               onClick={onClose}
               aria-label="Close chat"
-              className="absolute right-5 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 backdrop-blur transition hover:bg-white/20 hover:text-white"
+              animate={{ top: closeTop }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              style={{ position: 'absolute' }}
+              className="right-5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 backdrop-blur transition hover:bg-white/20 hover:text-white"
             >
               ✕
-            </button>
+            </motion.button>
 
             {/* Main content. The bot is a single, never-unmounted instance
                 throughout — its wrapper just moves from centered-and-big to
@@ -351,9 +376,10 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.25, delay: 0.1 }}
-                    className="absolute inset-0 pl-28 sm:pl-40 md:pl-48"
+                    className="absolute inset-x-0 bottom-0"
+                    style={{ top: headerHeight, borderTop: '1px solid rgba(255,255,255,0.08)' }}
                   >
-                    <div ref={scrollRef} data-lenis-prevent className="no-scrollbar h-full space-y-4 overflow-y-auto px-5 py-8 sm:px-8">
+                    <div ref={scrollRef} data-lenis-prevent className="no-scrollbar h-full space-y-4 overflow-y-auto px-5 py-6 sm:px-8">
                       {messages.map((m, i) => (
                         <ChatBubble key={i} role={m.role} text={m.text} />
                       ))}
@@ -391,8 +417,8 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                     // Typing again is the visitor fixing whatever tripped
                     // the angry reaction — Om should look normal again
                     // right away rather than still scowling mid-sentence.
-                    if (expression === 'angry') {
-                      setExpression('normal');
+                    if (angryFlash) {
+                      setAngryFlash(false);
                       if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
                     }
                   }}

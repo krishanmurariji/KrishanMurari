@@ -13,12 +13,14 @@
 // MeshPhysicalMaterial (clearcoat) — the same material family RubiksCube.tsx
 // already uses for its own glossy cubies, for a consistent look language.
 //
-// Expressions: `expression` drives three states — 'normal' (default idle),
+// Expressions: `expression` drives four states — 'normal' (default idle),
+// 'happy' (the big welcoming grin shown right when the chat opens),
 // 'thinking' (waiting on the API), and 'angry' (a validation/security
-// rejection). Rather than swapping geometry, the same eyebrow/mouth/color
-// values are just smoothly lerped every frame toward per-expression targets
-// (see EXPRESSION_TARGETS), so switching states reads as an expression
-// change rather than a jump-cut.
+// rejection, paired with a little ring of "seeing stars" confusion sparkles
+// orbiting the head). Rather than swapping geometry, the same
+// eyebrow/mouth/color/star values are just smoothly lerped every frame
+// toward per-expression targets (see EXPRESSION_TARGETS), so switching
+// states reads as an expression change rather than a jump-cut.
 import { useMemo, useRef } from 'react';
 import type { RefObject } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -26,7 +28,7 @@ import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { usePrefersReducedMotion } from '../../lib/useReducedMotion';
 
-export type BotExpression = 'normal' | 'thinking' | 'angry';
+export type BotExpression = 'normal' | 'happy' | 'thinking' | 'angry';
 
 const HEAD_COLOR = '#ffffff';
 const EAR_COLOR = '#4f9bff';
@@ -35,6 +37,7 @@ const EYE_COLOR = '#eaf6ff';
 const BLUSH_COLOR = '#ffb3c6';
 const BROW_COLOR = '#2a3140';
 const MOUTH_COLOR = '#ffffff';
+const STAR_COLOR = '#ffd54f';
 
 const BLINK_INTERVAL = 3.4;
 const BLINK_DURATION = 0.22;
@@ -58,6 +61,7 @@ interface ExpressionTarget {
   mouthColor: string;
   browColor: string;
   blush: number;
+  stars: number; // 0 = hidden, 1 = fully visible orbiting the head
 }
 
 const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
@@ -72,6 +76,22 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
     mouthColor: MOUTH_COLOR,
     browColor: BROW_COLOR,
     blush: 0.55,
+    stars: 0,
+  },
+  // The big welcome grin — a bigger, rounder smile and gently arched brows,
+  // shown right when the chat panel opens.
+  happy: {
+    browLZ: -0.08,
+    browRZ: 0.08,
+    browLY: 0.155,
+    browRY: 0.155,
+    mouthFlip: 0,
+    mouthScaleX: 1.25,
+    mouthScaleY: 1.15,
+    mouthColor: MOUTH_COLOR,
+    browColor: BROW_COLOR,
+    blush: 0.75,
+    stars: 0,
   },
   // A quizzical, one-eyebrow-raised look with a small pursed mouth.
   thinking: {
@@ -85,8 +105,11 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
     mouthColor: MOUTH_COLOR,
     browColor: BROW_COLOR,
     blush: 0.35,
+    stars: 0,
   },
-  // A sharp inward "V" brow and a flipped, reddened mouth.
+  // A sharp inward "V" brow, a flipped/reddened mouth, and a little ring of
+  // confusion stars circling the head — a bad/rejected input reads as "Om
+  // is confused and a bit annoyed", not just a flat error color.
   angry: {
     browLZ: 0.5,
     browRZ: -0.5,
@@ -98,6 +121,7 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
     mouthColor: '#ff8a65',
     browColor: '#7a2e2e',
     blush: 0.8,
+    stars: 1,
   },
 };
 
@@ -130,6 +154,7 @@ function Bot({ reducedMotion, expression }: { reducedMotion: boolean; expression
   const mouth = useRef<THREE.Mesh>(null);
   const browLeft = useRef<THREE.Mesh>(null);
   const browRight = useRef<THREE.Mesh>(null);
+  const stars = useRef<THREE.Group>(null);
 
   const headMat = useMemo(() => new THREE.MeshPhysicalMaterial({ color: HEAD_COLOR, roughness: 0.25, metalness: 0.05, clearcoat: 0.6, clearcoatRoughness: 0.25 }), []);
   const earMat = useMemo(() => new THREE.MeshPhysicalMaterial({ color: EAR_COLOR, roughness: 0.3, metalness: 0.1, clearcoat: 0.8, clearcoatRoughness: 0.2 }), []);
@@ -140,6 +165,7 @@ function Bot({ reducedMotion, expression }: { reducedMotion: boolean; expression
   const blushMat = useMemo(() => new THREE.MeshStandardMaterial({ color: BLUSH_COLOR, roughness: 0.6, transparent: true, opacity: 0.55 }), []);
   const mouthMat = useMemo(() => new THREE.MeshStandardMaterial({ color: MOUTH_COLOR, roughness: 0.35 }), []);
   const browMat = useMemo(() => new THREE.MeshStandardMaterial({ color: BROW_COLOR, roughness: 0.5 }), []);
+  const starMat = useMemo(() => new THREE.MeshStandardMaterial({ color: STAR_COLOR, emissive: '#ffb300', emissiveIntensity: 0.7, roughness: 0.3 }), []);
 
   // Smoothed (lerped-toward-target) expression values, kept in a ref rather
   // than component state so a change doesn't trigger a React re-render on
@@ -152,7 +178,7 @@ function Bot({ reducedMotion, expression }: { reducedMotion: boolean; expression
 
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
-    if (!group.current || !antenna.current || !leftEye.current || !rightEye.current || !mouth.current || !browLeft.current || !browRight.current) return;
+    if (!group.current || !antenna.current || !leftEye.current || !rightEye.current || !mouth.current || !browLeft.current || !browRight.current || !stars.current) return;
 
     // Chase this frame's expression target regardless of reduced-motion —
     // this is a state change the visitor needs to see, not ambient idle
@@ -169,6 +195,7 @@ function Bot({ reducedMotion, expression }: { reducedMotion: boolean; expression
     s.mouthScaleX = lerp(s.mouthScaleX, target.mouthScaleX);
     s.mouthScaleY = lerp(s.mouthScaleY, target.mouthScaleY);
     s.blush = lerp(s.blush, target.blush);
+    s.stars = lerp(s.stars, target.stars);
     s.mouthColorObj.lerp(new THREE.Color(target.mouthColor), EXPRESSION_LERP);
     s.browColorObj.lerp(new THREE.Color(target.browColor), EXPRESSION_LERP);
 
@@ -179,6 +206,14 @@ function Bot({ reducedMotion, expression }: { reducedMotion: boolean; expression
     browMat.color.copy(s.browColorObj);
     mouthMat.color.copy(s.mouthColorObj);
     blushMat.opacity = s.blush;
+
+    // A little ring of "seeing stars" sparkles that spin around the head —
+    // faded in/out via uniform scale rather than mounting/unmounting, so it
+    // never pops. Orbit angle is a function of elapsed time rather than an
+    // incremental step, so it stays correct even across sparse frames (the
+    // reduced-motion / frameloop="demand" case).
+    stars.current.scale.setScalar(s.stars);
+    stars.current.rotation.y = t * 1.6;
 
     const mouthCenter = MOUTH_CENTER_SMILE + (MOUTH_CENTER_FROWN - MOUTH_CENTER_SMILE) * s.mouthFlip;
 
@@ -226,6 +261,16 @@ function Bot({ reducedMotion, expression }: { reducedMotion: boolean; expression
       <mesh ref={mouth} position={[0, -0.13, 0.53]} material={mouthMat}>
         <torusGeometry args={[0.075, 0.014, 8, 24, MOUTH_ARC]} />
       </mesh>
+      <group ref={stars} position={[0, 0.56, 0]} scale={0}>
+        {[0, 1, 2].map((i) => {
+          const angle = (i / 3) * Math.PI * 2;
+          return (
+            <mesh key={i} position={[Math.cos(angle) * 0.5, Math.sin(angle) * 0.1, Math.sin(angle) * 0.35]} material={starMat}>
+              <octahedronGeometry args={[0.05, 0]} />
+            </mesh>
+          );
+        })}
+      </group>
     </group>
   );
 }

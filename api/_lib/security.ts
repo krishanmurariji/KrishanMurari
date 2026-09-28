@@ -47,6 +47,28 @@ export function checkGlobalDailyLimit(name: string, max: number): boolean {
   return checkRateLimit(`daily:${name}:${today}`, max, 24 * 60 * 60 * 1000);
 }
 
+// Rejects a message that's actually a script/markup injection attempt
+// rather than a real question — the server-side twin of
+// src/lib/scriptDetection.ts's identical check. The client-side copy is a
+// UX nicety only (instant rejection + Om's angry face, no round trip); this
+// one is the real gate, since a client-only check protects nothing against
+// a request sent straight at the endpoint.
+const SUSPICIOUS_PATTERNS = [
+  /<\s*script[\s>]/i,
+  /<\s*\/\s*script\s*>/i,
+  /<\s*iframe[\s>]/i,
+  /<\s*img[^>]*\bon\w+\s*=/i,
+  /javascript\s*:/i,
+  /on(?:error|load|click|mouseover|focus|blur|input|change|submit)\s*=/i,
+  /document\s*\.\s*(cookie|write|location)/i,
+  /window\s*\.\s*location/i,
+  /eval\s*\(/i,
+];
+
+export function containsUnsafeContent(text: string): boolean {
+  return SUSPICIOUS_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 // Cloudflare Turnstile server-side verification — a client widget hands
 // back an opaque token that only proves anything once it's checked against
 // Cloudflare's own siteverify endpoint with the secret key; trusting the

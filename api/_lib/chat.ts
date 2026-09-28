@@ -9,6 +9,7 @@
 // duplicating it).
 import { GoogleGenAI, ApiError } from '@google/genai';
 import { buildAssistantSystemPrompt } from './assistant-knowledge';
+import { containsUnsafeContent } from './security';
 
 export interface ChatMessage {
   role: 'user' | 'model';
@@ -52,6 +53,9 @@ export function validateChatBody(body: Record<string, unknown>): { messages?: Ch
     const trimmed = text.trim();
     if (trimmed.length > MAX_MESSAGE_LENGTH) {
       return { error: `Messages must be under ${MAX_MESSAGE_LENGTH} characters.` };
+    }
+    if (containsUnsafeContent(trimmed)) {
+      return { error: "That message contains script-like content that isn't allowed here." };
     }
     messages.push({ role, text: trimmed });
   }

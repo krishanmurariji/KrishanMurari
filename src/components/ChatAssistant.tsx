@@ -23,8 +23,15 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
-import RobotAvatar3D from './ui/RobotAvatar3D';
+import RobotAvatar3D, { type BotExpression } from './ui/RobotAvatar3D';
 import { usePrefersReducedMotion } from '../lib/useReducedMotion';
+import { containsUnsafeContent } from '../lib/scriptDetection';
+import { playAngrySound, playThinkingSound, playReplySound } from '../lib/chatSounds';
+
+// How long Om's angry expression holds before easing back to normal on its
+// own — long enough to register as a reaction, short enough not to still be
+// scowling by the time the visitor has fixed their message.
+const ANGRY_HOLD_MS = 1800;
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 const MAX_MESSAGE_LENGTH = 600;
@@ -91,10 +98,12 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   const [error, setError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  const [expression, setExpression] = useState<BotExpression>('normal');
   const turnstileRef = useRef<TurnstileHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const angryTimeoutRef = useRef<number | null>(null);
   const [botRect, setBotRect] = useState({ top: 0, left: 0, size: 192 });
 
   const hasStarted = messages.length > 0;
@@ -140,18 +149,53 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     if (!open) {
       recognitionRef.current?.stop();
       setListening(false);
+      setExpression('normal');
+      if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
     }
   }, [open]);
 
+  // Clear a pending "ease back to normal" timer on unmount so it can't fire
+  // setState after the component is gone.
+  useEffect(() => () => {
+    if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
+  }, []);
+
+  // Om's reaction to a validation or security problem: a brief angry
+  // expression plus a matching sound, easing back to normal on its own
+  // shortly after (or as soon as the visitor starts typing again).
+  const flashAngry = () => {
+    setExpression('angry');
+    playAngrySound();
+    if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
+    angryTimeoutRef.current = window.setTimeout(() => setExpression('normal'), ANGRY_HOLD_MS);
+  };
+
   const handleSend = async () => {
+    if (sending) return;
     const text = input.trim();
-    if (!text || sending) return;
+    if (!text) {
+      setError('Please write a message before sending.');
+      flashAngry();
+      return;
+    }
     if (text.length > MAX_MESSAGE_LENGTH) {
       setError(`Messages must be under ${MAX_MESSAGE_LENGTH} characters.`);
+      flashAngry();
+      return;
+    }
+    // Reject an obvious script/markup injection attempt immediately, before
+    // it ever reaches the network — the server re-checks the same thing in
+    // api/chat.ts, since a client-only check can't stop a request sent
+    // straight at the endpoint, but there's no reason to make an honest
+    // mistake wait on a round trip to hear about it.
+    if (containsUnsafeContent(text)) {
+      setError("That message contains script-like content that isn't allowed here — please rewrite it in plain text.");
+      flashAngry();
       return;
     }
     if (isFirstMessage && !turnstileToken) {
       setError('Please complete the verification check before sending.');
+      flashAngry();
       return;
     }
 
@@ -160,6 +204,8 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     setInput('');
     setSending(true);
     setError(null);
+    setExpression('thinking');
+    playThinkingSound();
 
     try {
       const res = await fetch('/api/chat', {
@@ -173,8 +219,11 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Something went wrong — try again.');
       setMessages((prev) => [...prev, { role: 'model', text: data.reply as string }]);
+      setExpression('normal');
+      playReplySound();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong — try again.');
+      flashAngry();
       // The failed turn stays in the transcript (it really was sent), but a
       // spent single-use Turnstile token can't be reused for the retry — a
       // fresh widget solve is exactly what the user is about to see again.
@@ -279,7 +328,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 className="z-10"
               >
-                <RobotAvatar3D className="h-full w-full" />
+                <RobotAvatar3D className="h-full w-full" expression={expression} />
               </motion.div>
 
               <AnimatePresence>
@@ -337,7 +386,16 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
               >
                 <textarea
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    // Typing again is the visitor fixing whatever tripped
+                    // the angry reaction — Om should look normal again
+                    // right away rather than still scowling mid-sentence.
+                    if (expression === 'angry') {
+                      setExpression('normal');
+                      if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
+                    }
+                  }}
                   onKeyDown={handleKeyDown}
                   disabled={sending}
                   maxLength={MAX_MESSAGE_LENGTH}

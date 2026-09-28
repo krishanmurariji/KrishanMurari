@@ -27,6 +27,27 @@ const GLOBAL_DAILY_MAX = 1000;
 // this ever 404s again, the runtime error names the current replacement.
 const MODEL = 'gemini-3.8-flash';
 
+// Rejects a message that's actually a script/markup injection attempt
+// rather than a real question — kept in sync by hand with the identical
+// checks in api/_lib/security.ts (the dev-plugin copy) and
+// src/lib/scriptDetection.ts (the client-side pre-check, a UX nicety only —
+// this server copy is the real gate).
+const SUSPICIOUS_PATTERNS = [
+  /<\s*script[\s>]/i,
+  /<\s*\/\s*script\s*>/i,
+  /<\s*iframe[\s>]/i,
+  /<\s*img[^>]*\bon\w+\s*=/i,
+  /javascript\s*:/i,
+  /on(?:error|load|click|mouseover|focus|blur|input|change|submit)\s*=/i,
+  /document\s*\.\s*(cookie|write|location)/i,
+  /window\s*\.\s*location/i,
+  /eval\s*\(/i,
+];
+
+function containsUnsafeContent(text: string): boolean {
+  return SUSPICIOUS_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 function validateChatBody(body: Record<string, unknown>): { messages?: ChatMessage[]; turnstileToken?: string; error?: string } {
   const rawMessages = body.messages;
   if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
@@ -45,6 +66,9 @@ function validateChatBody(body: Record<string, unknown>): { messages?: ChatMessa
     const trimmed = text.trim();
     if (trimmed.length > MAX_MESSAGE_LENGTH) {
       return { error: `Messages must be under ${MAX_MESSAGE_LENGTH} characters.` };
+    }
+    if (containsUnsafeContent(trimmed)) {
+      return { error: "That message contains script-like content that isn't allowed here." };
     }
     messages.push({ role, text: trimmed });
   }

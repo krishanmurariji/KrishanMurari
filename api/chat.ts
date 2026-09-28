@@ -10,7 +10,7 @@
 // fix; the duplication with api/_lib/ (still the source dev/ imports) is
 // the accepted cost — keep both in sync if this logic ever changes.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ApiError } from '@google/genai';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -187,22 +187,44 @@ function buildAssistantSystemPrompt(): string {
 const FALLBACK_REPLY = "Sorry, I couldn't come up with a reply to that — try rephrasing, or reach Krishan directly at murari@krishan.is-a.dev.";
 const BLOCKED_REPLY = "I can only help with questions about Krishan's background and work — let's keep to that. You can also reach him directly at murari@krishan.is-a.dev.";
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function generateAssistantReply(apiKey: string, messages: ChatMessage[]): Promise<string> {
   const ai = new GoogleGenAI({ apiKey });
   const contents = messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents,
-    config: {
-      systemInstruction: buildAssistantSystemPrompt(),
-      temperature: 0.6,
-      maxOutputTokens: 400,
-    },
-  });
+  // A 503 ("model overloaded, try again") is Google's own servers being
+  // momentarily over capacity — common for a newly-launched model, and
+  // genuinely transient, unlike a 400/404 (bad key/model, retrying won't
+  // help). One short retry turns "visitor sees a random failure" into
+  // "visitor never notices" for exactly that one recoverable case.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents,
+        config: {
+          systemInstruction: buildAssistantSystemPrompt(),
+          temperature: 0.6,
+          maxOutputTokens: 400,
+        },
+      });
 
-  if (response.promptFeedback?.blockReason) return BLOCKED_REPLY;
-  return response.text?.trim() || FALLBACK_REPLY;
+      if (response.promptFeedback?.blockReason) return BLOCKED_REPLY;
+      return response.text?.trim() || FALLBACK_REPLY;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 0 && err instanceof ApiError && err.status === 503) {
+        await sleep(700);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

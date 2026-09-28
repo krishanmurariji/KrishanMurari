@@ -27,7 +27,12 @@ export const MAX_MESSAGE_LENGTH = 600;
 // burst of chat traffic degrades to "assistant's resting for today, please
 // email me" well before it silently starts failing with a raw 429.
 export const GLOBAL_DAILY_MAX = 1000;
-const MODEL = 'gemini-2.5-flash';
+// gemini-2.5-flash was retired for new API keys — confirmed live against
+// Google's own API error ("models/gemini-2.5-flash is no longer available
+// to new users... use models/gemini-3.8-flash"), not assumed from
+// (possibly stale) SDK docs. Google rotates model names periodically; if
+// this ever 404s again, the runtime error names the current replacement.
+const MODEL = 'gemini-3.8-flash';
 
 export function validateChatBody(body: Record<string, unknown>): { messages?: ChatMessage[]; turnstileToken?: string; error?: string } {
   const rawMessages = body.messages;

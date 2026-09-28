@@ -20,7 +20,12 @@ interface ChatMessage {
 const MAX_MESSAGES = 24;
 const MAX_MESSAGE_LENGTH = 600;
 const GLOBAL_DAILY_MAX = 1000;
-const MODEL = 'gemini-2.5-flash';
+// gemini-2.5-flash was retired for new API keys — confirmed live against
+// Google's own API error ("models/gemini-2.5-flash is no longer available
+// to new users... use models/gemini-3.8-flash"), not assumed from
+// (possibly stale) SDK docs. Google rotates model names periodically; if
+// this ever 404s again, the runtime error names the current replacement.
+const MODEL = 'gemini-3.8-flash';
 
 function validateChatBody(body: Record<string, unknown>): { messages?: ChatMessage[]; turnstileToken?: string; error?: string } {
   const rawMessages = body.messages;

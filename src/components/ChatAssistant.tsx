@@ -120,26 +120,32 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
-  // Drives the bot's move from centered-and-big to a docked header-row icon
-  // via real top/left/width/height numbers rather than framer motion's
-  // `layout` prop — `layout` fakes a smooth resize with a temporary CSS
-  // transform: scale(), and applying that to a box containing a
-  // react-three-fiber <Canvas> corrupted the WebGL render into a cropped
-  // mess (confirmed live: a plain width/height style animation resizes the
-  // same canvas cleanly, so the transform step specifically is what breaks
-  // it — which is also why the "jump" below animates real `top` keyframes
-  // rather than a `scale` transform for the landing squash). Once docked,
-  // the bot sits in a header strip at the very top of the panel (not
-  // floating over the transcript) — the close button and the transcript's
-  // own top offset are both derived from this same rect so all three stay
-  // visually aligned as one header row.
+  // Drives the bot's move from centered-and-big to a docked header-row icon.
+  // Earlier this animated real top/left/width/height numbers continuously
+  // over ~600ms (a "jump" arc) — safer than a `transform: scale` (which
+  // corrupted the react-three-fiber <Canvas> when combined with a real
+  // resize, confirmed live), but continuously resizing a *live* WebGL
+  // canvas frame-by-frame still glitched on some GPUs, since the browser
+  // has to reallocate the framebuffer on every intermediate size. The fix
+  // here sidesteps resizing the canvas while it's visible at all: the bot
+  // vanishes in a puff of smoke at the hero spot, snaps instantly to its
+  // docked size/position while invisible, then reappears in a second puff —
+  // a "dash". The smoke itself is plain DOM/CSS (SmokePuff below), never
+  // touching the canvas, so it can't glitch the same way. Once docked, the
+  // bot sits in a header strip at the very top of the panel (not floating
+  // over the transcript) — the close button and the transcript's own top
+  // offset are both derived from this same rect so all three stay visually
+  // aligned as one header row.
   const botControls = useAnimationControls();
   const isFirstBotRectRef = useRef(true);
   const wasStartedRef = useRef(hasStarted);
+  const [botVisible, setBotVisible] = useState(true);
+  const [smokeBurst, setSmokeBurst] = useState<{ key: number; top: number; left: number; size: number } | null>(null);
+  const dashTimeoutRef = useRef<number | null>(null);
 
   // Every fresh open (including reopening a conversation that already has
   // messages) should just snap the bot into its correct spot, never replay
-  // the jump — the jump is reserved for the one live moment a conversation
+  // the dash — the dash is reserved for the one live moment a conversation
   // actually starts while the panel is already open.
   useEffect(() => {
     if (open) isFirstBotRectRef.current = true;
@@ -167,28 +173,27 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
 
       if (isFirstBotRectRef.current) {
         // First paint (or reopening an already-started conversation) — snap
-        // straight there, no animation, same as the plain reactive `animate`
-        // this replaced.
+        // straight there, no animation, no dash.
         isFirstBotRectRef.current = false;
         botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
         return;
       }
 
       if (justDocked) {
-        // The requested "jump": leap up past the landing spot, then fall
-        // into place — real `top` keyframes, not a transform, so the live
-        // Canvas never gets a transform + resize at the same time (see the
-        // comment above this effect).
-        const JUMP_RISE = 34;
-        botControls.start({
-          top: [heroRect.top, target.top - JUMP_RISE, target.top],
-          left: [heroRect.left, (heroRect.left + target.left) / 2, target.left],
-          width: [heroRect.size, (heroRect.size + target.size) / 2, target.size],
-          height: [heroRect.size, (heroRect.size + target.size) / 2, target.size],
-          transition: { duration: 0.62, times: [0, 0.55, 1], ease: ['easeOut', 'easeIn'] },
-        });
+        const DASH_HIDE_MS = 220;
+        setBotVisible(false);
+        setSmokeBurst({ key: Date.now(), top: heroRect.top, left: heroRect.left, size: heroRect.size });
+
+        if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
+        dashTimeoutRef.current = window.setTimeout(() => {
+          // Resize while invisible — no glitch to see, since nothing is
+          // being rendered on screen during the swap.
+          botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
+          setSmokeBurst({ key: Date.now(), top: target.top, left: target.left, size: target.size });
+          setBotVisible(true);
+        }, DASH_HIDE_MS);
       } else {
-        // Plain reflow (e.g. a window resize) — smooth, no jump.
+        // Plain reflow (e.g. a window resize) — smooth, no dash.
         botControls.start({
           top: target.top,
           left: target.left,
@@ -202,6 +207,14 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     window.addEventListener('resize', applyRect);
     return () => window.removeEventListener('resize', applyRect);
   }, [open, hasStarted, botControls]);
+
+  // A smoke burst clears itself once its own particle animation has
+  // finished playing.
+  useEffect(() => {
+    if (!smokeBurst) return;
+    const id = window.setTimeout(() => setSmokeBurst(null), 650);
+    return () => window.clearTimeout(id);
+  }, [smokeBurst]);
 
   // The docked bot's header row: the transcript starts below it (never
   // beside it, so messages stay flush left instead of squeezed right of a
@@ -220,13 +233,17 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
       setListening(false);
       setAngryFlash(false);
       if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
+      setBotVisible(true);
+      setSmokeBurst(null);
+      if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
     }
   }, [open]);
 
-  // Clear a pending "ease back to normal" timer on unmount so it can't fire
-  // setState after the component is gone.
+  // Clear pending timers on unmount so they can't fire setState after the
+  // component is gone.
   useEffect(() => () => {
     if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
+    if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
   }, []);
 
   // Om's reaction to a validation or security problem: a brief angry
@@ -381,22 +398,34 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
               ✕
             </motion.button>
 
-            {/* Main content. The bot is a single, never-unmounted instance
-                throughout — its wrapper just moves from centered-and-big to
-                docked-top-left. It deliberately does NOT use separate
-                mounted-in-two-places elements joined by a shared layoutId:
-                that asks framer motion to cross-fade between two independent
-                <Canvas> instances, and WebGL canvases don't survive that
-                cross-fade cleanly — confirmed live (the second canvas
-                rendered corrupted/cropped mid-transition), the same category
-                of issue as GlassBackdrop's own "backdrop-filter can't
-                reliably sample a WebGL canvas" problem elsewhere in this
-                codebase. Keeping one live canvas and only moving its box
-                (via botControls, see the effect above) sidesteps that. */}
+            {/* Main content. The bot is a single, never-unmounted <Canvas>
+                instance throughout — its wrapper's box only ever snaps
+                between two fixed rects (see the effect above for why),
+                never tweens continuously, so the canvas itself is never
+                mid-resize while visible. An inner div fades its opacity for
+                the vanish/reappear "dash", and SmokePuff (plain DOM/CSS,
+                never touching the canvas) sells the illusion of movement in
+                between. This also rules out mounting two <Canvas>
+                instances joined by a shared layoutId to cross-fade between
+                hero and docked: WebGL canvases don't survive that kind of
+                cross-fade cleanly either (confirmed live, corrupted/cropped
+                mid-transition) — the same category of issue as
+                GlassBackdrop's own "backdrop-filter can't reliably sample a
+                WebGL canvas" problem elsewhere in this codebase. */}
             <div ref={contentRef} className="relative min-h-0 flex-1">
               <motion.div style={{ position: 'absolute' }} animate={botControls} className="z-10">
-                <RobotAvatar3D className="h-full w-full" expression={expression} />
+                <motion.div
+                  animate={{ opacity: botVisible ? 1 : 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="h-full w-full"
+                >
+                  <RobotAvatar3D className="h-full w-full" expression={expression} />
+                </motion.div>
               </motion.div>
+
+              {smokeBurst && (
+                <SmokePuff key={smokeBurst.key} top={smokeBurst.top} left={smokeBurst.left} size={smokeBurst.size} />
+              )}
 
               <AnimatePresence>
                 {!hasStarted && (
@@ -520,6 +549,58 @@ function ChatBubble({ role, text }: { role: 'user' | 'model'; text: string }) {
         {text}
       </div>
     </motion.div>
+  );
+}
+
+// A puff of smoke at a fixed rect — plain absolutely-positioned/blurred
+// spans animated via ordinary CSS transform (top/left/scale/opacity), never
+// touching the WebGL canvas, so it can't trigger the resize-glitch the dash
+// above is built to avoid. Each particle drifts outward from center and
+// fades; a couple are stretched into short streaks for a "wind" feel rather
+// than a uniform circular poof.
+const SMOKE_PARTICLE_COUNT = 6;
+
+function SmokePuff({ top, left, size }: { top: number; left: number; size: number }) {
+  return (
+    <div
+      style={{ position: 'absolute', top, left, width: size, height: size, pointerEvents: 'none' }}
+      className="z-20"
+    >
+      {Array.from({ length: SMOKE_PARTICLE_COUNT }).map((_, i) => {
+        const angle = (i / SMOKE_PARTICLE_COUNT) * Math.PI * 2;
+        const dist = size * (0.34 + (i % 2) * 0.16);
+        const isStreak = i % 3 === 0;
+        const puffW = isStreak ? size * 0.46 : size * (0.28 + (i % 3) * 0.06);
+        const puffH = isStreak ? size * 0.15 : puffW;
+        return (
+          <motion.span
+            key={i}
+            initial={{
+              opacity: 0.65,
+              scale: 0.4,
+              top: size / 2 - puffH / 2,
+              left: size / 2 - puffW / 2,
+              rotate: (angle * 180) / Math.PI,
+            }}
+            animate={{
+              opacity: 0,
+              scale: 1.5,
+              top: size / 2 - puffH / 2 + Math.sin(angle) * dist,
+              left: size / 2 - puffW / 2 + Math.cos(angle) * dist,
+            }}
+            transition={{ duration: 0.5, delay: (i % 3) * 0.03, ease: 'easeOut' }}
+            style={{
+              position: 'absolute',
+              width: puffW,
+              height: puffH,
+              borderRadius: '9999px',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.9), rgba(195,201,214,0.35) 55%, transparent 72%)',
+              filter: 'blur(3px)',
+            }}
+          />
+        );
+      })}
+    </div>
   );
 }
 

@@ -68,8 +68,8 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
   normal: {
     browLZ: 0,
     browRZ: 0,
-    browLY: 0.145,
-    browRY: 0.145,
+    browLY: 0.177,
+    browRY: 0.177,
     mouthFlip: 0,
     mouthScaleX: 1,
     mouthScaleY: 1,
@@ -83,8 +83,8 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
   happy: {
     browLZ: -0.08,
     browRZ: 0.08,
-    browLY: 0.155,
-    browRY: 0.155,
+    browLY: 0.189,
+    browRY: 0.189,
     mouthFlip: 0,
     mouthScaleX: 1.25,
     mouthScaleY: 1.15,
@@ -97,8 +97,8 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
   thinking: {
     browLZ: -0.05,
     browRZ: 0.32,
-    browLY: 0.145,
-    browRY: 0.185,
+    browLY: 0.177,
+    browRY: 0.226,
     mouthFlip: 0,
     mouthScaleX: 0.55,
     mouthScaleY: 0.55,
@@ -113,8 +113,8 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
   angry: {
     browLZ: 0.5,
     browRZ: -0.5,
-    browLY: 0.115,
-    browRY: 0.115,
+    browLY: 0.14,
+    browRY: 0.14,
     mouthFlip: 1,
     mouthScaleX: 1,
     mouthScaleY: 1,
@@ -138,10 +138,10 @@ function Eye({ eyeRef, x, eyeMat, pupilMat, sparkleMat }: {
   sparkleMat: THREE.Material;
 }) {
   return (
-    <group ref={eyeRef} position={[x, 0.03, 0.5]}>
-      <mesh material={eyeMat}><sphereGeometry args={[0.09, 20, 20]} /></mesh>
-      <mesh position={[0, -0.012, 0.07]} material={pupilMat}><sphereGeometry args={[0.05, 16, 16]} /></mesh>
-      <mesh position={[0.02, 0.024, 0.105]} material={sparkleMat}><sphereGeometry args={[0.016, 8, 8]} /></mesh>
+    <group ref={eyeRef} position={[x, 0.037, 0.5]}>
+      <mesh material={eyeMat}><sphereGeometry args={[0.11, 20, 20]} /></mesh>
+      <mesh position={[0, -0.015, 0.085]} material={pupilMat}><sphereGeometry args={[0.061, 16, 16]} /></mesh>
+      <mesh position={[0.025, 0.03, 0.13]} material={sparkleMat}><sphereGeometry args={[0.02, 8, 8]} /></mesh>
     </group>
   );
 }
@@ -251,15 +251,19 @@ function Bot({ reducedMotion, expression }: { reducedMotion: boolean; expression
       <mesh position={[-0.66, -0.02, 0]} material={earMat}><sphereGeometry args={[0.16, 20, 20]} /></mesh>
       <mesh position={[0.66, -0.02, 0]} material={earMat}><sphereGeometry args={[0.16, 20, 20]} /></mesh>
       <RoundedBox args={[1.2, 1.15, 0.95]} radius={0.46} smoothness={5} material={headMat} />
-      <RoundedBox args={[0.66, 0.46, 0.06]} radius={0.18} smoothness={5} position={[0, -0.02, 0.47]} material={screenMat} />
-      <Eye eyeRef={leftEye} x={-0.16} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
-      <Eye eyeRef={rightEye} x={0.16} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
-      <mesh ref={browLeft} position={[-0.16, 0.145, 0.535]} material={browMat}><boxGeometry args={[0.15, 0.032, 0.03]} /></mesh>
-      <mesh ref={browRight} position={[0.16, 0.145, 0.535]} material={browMat}><boxGeometry args={[0.15, 0.032, 0.03]} /></mesh>
-      <mesh position={[-0.42, -0.14, 0.45]} rotation={[0, 0.5, 0]} material={blushMat}><circleGeometry args={[0.09, 16]} /></mesh>
-      <mesh position={[0.42, -0.14, 0.45]} rotation={[0, -0.5, 0]} material={blushMat}><circleGeometry args={[0.09, 16]} /></mesh>
-      <mesh ref={mouth} position={[0, -0.13, 0.53]} material={mouthMat}>
-        <torusGeometry args={[0.075, 0.014, 8, 24, MOUTH_ARC]} />
+      {/* The face screen — sized up from the earlier, smaller plate (and
+          its rounded edge, the "thin border" against the white head) so
+          the whole face reads bigger; eyes/brows/mouth/blush below are all
+          scaled and repositioned to match. */}
+      <RoundedBox args={[0.8, 0.56, 0.06]} radius={0.22} smoothness={5} position={[0, -0.02, 0.47]} material={screenMat} />
+      <Eye eyeRef={leftEye} x={-0.2} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
+      <Eye eyeRef={rightEye} x={0.2} eyeMat={eyeMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
+      <mesh ref={browLeft} position={[-0.2, 0.177, 0.535]} material={browMat}><boxGeometry args={[0.18, 0.04, 0.037]} /></mesh>
+      <mesh ref={browRight} position={[0.2, 0.177, 0.535]} material={browMat}><boxGeometry args={[0.18, 0.04, 0.037]} /></mesh>
+      <mesh position={[-0.51, -0.17, 0.46]} rotation={[0, 0.5, 0]} material={blushMat}><circleGeometry args={[0.11, 16]} /></mesh>
+      <mesh position={[0.51, -0.17, 0.46]} rotation={[0, -0.5, 0]} material={blushMat}><circleGeometry args={[0.11, 16]} /></mesh>
+      <mesh ref={mouth} position={[0, -0.159, 0.53]} material={mouthMat}>
+        <torusGeometry args={[0.092, 0.017, 8, 24, MOUTH_ARC]} />
       </mesh>
       <group ref={stars} position={[0, 0.56, 0]} scale={0}>
         {[0, 1, 2].map((i) => {

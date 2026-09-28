@@ -22,6 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
+import RobotAvatar from './ui/RobotAvatar';
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 const MAX_MESSAGE_LENGTH = 600;
@@ -128,10 +129,13 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
             }}
           >
             {/* Header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
-              <div>
-                <div className="text-[14px] font-semibold text-white">Chat with Krishan&rsquo;s AI</div>
-                <div className="text-[11px] text-white/45">Usually replies instantly</div>
+            <div className="flex shrink-0 items-center gap-2.5 justify-between border-b border-white/10 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <RobotAvatar className="h-8 w-8 shrink-0" />
+                <div>
+                  <div className="text-[14px] font-semibold text-white">Chat with Krishan&rsquo;s AI</div>
+                  <div className="text-[11px] text-white/45">Usually replies instantly</div>
+                </div>
               </div>
               <button
                 type="button"
@@ -201,9 +205,10 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
 function ChatBubble({ role, text }: { role: 'user' | 'model'; text: string }) {
   const isUser = role === 'user';
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex items-end gap-1.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
+      {!isUser && <RobotAvatar className="h-6 w-6 shrink-0" />}
       <div
-        className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${
+        className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${
           isUser ? 'rounded-br-sm bg-white text-black' : 'rounded-bl-sm bg-white/10 text-white/90'
         }`}
       >
@@ -215,7 +220,8 @@ function ChatBubble({ role, text }: { role: 'user' | 'model'; text: string }) {
 
 function TypingBubble() {
   return (
-    <div className="flex justify-start">
+    <div className="flex items-end justify-start gap-1.5">
+      <RobotAvatar className="h-6 w-6 shrink-0" />
       <div className="flex items-center gap-1 rounded-2xl rounded-bl-sm bg-white/10 px-3.5 py-2.5">
         {[0, 1, 2].map((i) => (
           <span

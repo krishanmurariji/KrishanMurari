@@ -21,7 +21,7 @@
 // per-visitor) are the ongoing defense after that.
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
 import RobotAvatar3D, { type BotExpression } from './ui/RobotAvatar3D';
 import { usePrefersReducedMotion } from '../lib/useReducedMotion';
@@ -114,10 +114,6 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   // set ad hoc all over the component: a validation/security flash always
   // wins, then "waiting on the API", then the big welcome grin for the
   // not-yet-started conversation, and otherwise the default smile.
-  // Om's expression is derived from what's actually happening rather than
-  // set ad hoc all over the component: a validation/security flash always
-  // wins, then "waiting on the API", then the big welcome grin for the
-  // not-yet-started conversation, and otherwise the default smile.
   const expression: BotExpression = angryFlash ? 'angry' : sending ? 'thinking' : !hasStarted ? 'happy' : 'normal';
 
   useEffect(() => {
@@ -131,30 +127,81 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   // react-three-fiber <Canvas> corrupted the WebGL render into a cropped
   // mess (confirmed live: a plain width/height style animation resizes the
   // same canvas cleanly, so the transform step specifically is what breaks
-  // it). Recomputed on open, whenever the hero/docked state flips, and on
-  // window resize. Once docked, the bot sits in a header strip at the very
-  // top of the panel (not floating over the transcript) — the close button
-  // and the transcript's own top offset are both derived from this same
-  // rect so all three stay visually aligned as one header row.
+  // it — which is also why the "jump" below animates real `top` keyframes
+  // rather than a `scale` transform for the landing squash). Once docked,
+  // the bot sits in a header strip at the very top of the panel (not
+  // floating over the transcript) — the close button and the transcript's
+  // own top offset are both derived from this same rect so all three stay
+  // visually aligned as one header row.
+  const botControls = useAnimationControls();
+  const isFirstBotRectRef = useRef(true);
+  const wasStartedRef = useRef(hasStarted);
+
+  // Every fresh open (including reopening a conversation that already has
+  // messages) should just snap the bot into its correct spot, never replay
+  // the jump — the jump is reserved for the one live moment a conversation
+  // actually starts while the panel is already open.
+  useEffect(() => {
+    if (open) isFirstBotRectRef.current = true;
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    const computeRect = () => {
+    const applyRect = () => {
       const el = contentRef.current;
       if (!el) return;
       const { width, height } = el.getBoundingClientRect();
-      if (hasStarted) {
-        const size = width < 640 ? 56 : width < 768 ? 64 : 72;
-        const left = width < 640 ? 20 : 28;
-        setBotRect({ top: 20, left, size });
+
+      const dockedSize = width < 640 ? 56 : width < 768 ? 64 : 72;
+      const dockedLeft = width < 640 ? 20 : 28;
+      const dockedRect = { top: 20, left: dockedLeft, size: dockedSize };
+
+      const heroSize = width < 640 ? 144 : 192;
+      const heroRect = { top: height * 0.38 - heroSize / 2, left: width / 2 - heroSize / 2, size: heroSize };
+
+      const target = hasStarted ? dockedRect : heroRect;
+      setBotRect(target);
+
+      const justDocked = !wasStartedRef.current && hasStarted;
+      wasStartedRef.current = hasStarted;
+
+      if (isFirstBotRectRef.current) {
+        // First paint (or reopening an already-started conversation) — snap
+        // straight there, no animation, same as the plain reactive `animate`
+        // this replaced.
+        isFirstBotRectRef.current = false;
+        botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
+        return;
+      }
+
+      if (justDocked) {
+        // The requested "jump": leap up past the landing spot, then fall
+        // into place — real `top` keyframes, not a transform, so the live
+        // Canvas never gets a transform + resize at the same time (see the
+        // comment above this effect).
+        const JUMP_RISE = 34;
+        botControls.start({
+          top: [heroRect.top, target.top - JUMP_RISE, target.top],
+          left: [heroRect.left, (heroRect.left + target.left) / 2, target.left],
+          width: [heroRect.size, (heroRect.size + target.size) / 2, target.size],
+          height: [heroRect.size, (heroRect.size + target.size) / 2, target.size],
+          transition: { duration: 0.62, times: [0, 0.55, 1], ease: ['easeOut', 'easeIn'] },
+        });
       } else {
-        const size = width < 640 ? 144 : 192;
-        setBotRect({ top: height * 0.38 - size / 2, left: width / 2 - size / 2, size });
+        // Plain reflow (e.g. a window resize) — smooth, no jump.
+        botControls.start({
+          top: target.top,
+          left: target.left,
+          width: target.size,
+          height: target.size,
+          transition: { type: 'spring', stiffness: 300, damping: 30 },
+        });
       }
     };
-    computeRect();
-    window.addEventListener('resize', computeRect);
-    return () => window.removeEventListener('resize', computeRect);
-  }, [open, hasStarted]);
+    applyRect();
+    window.addEventListener('resize', applyRect);
+    return () => window.removeEventListener('resize', applyRect);
+  }, [open, hasStarted, botControls]);
 
   // The docked bot's header row: the transcript starts below it (never
   // beside it, so messages stay flush left instead of squeezed right of a
@@ -336,23 +383,18 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
 
             {/* Main content. The bot is a single, never-unmounted instance
                 throughout — its wrapper just moves from centered-and-big to
-                docked-top-left via the `layout` prop's own FLIP animation.
-                It deliberately does NOT use separate mounted-in-two-places
-                elements joined by a shared layoutId: that asks framer motion
-                to cross-fade between two independent <Canvas> instances,
-                and WebGL canvases don't survive that cross-fade cleanly —
-                confirmed live (the second canvas rendered corrupted/cropped
-                mid-transition), the same category of issue as
-                GlassBackdrop's own "backdrop-filter can't reliably sample a
-                WebGL canvas" problem elsewhere in this codebase. Keeping one
-                live canvas and only moving its box sidesteps that. */}
+                docked-top-left. It deliberately does NOT use separate
+                mounted-in-two-places elements joined by a shared layoutId:
+                that asks framer motion to cross-fade between two independent
+                <Canvas> instances, and WebGL canvases don't survive that
+                cross-fade cleanly — confirmed live (the second canvas
+                rendered corrupted/cropped mid-transition), the same category
+                of issue as GlassBackdrop's own "backdrop-filter can't
+                reliably sample a WebGL canvas" problem elsewhere in this
+                codebase. Keeping one live canvas and only moving its box
+                (via botControls, see the effect above) sidesteps that. */}
             <div ref={contentRef} className="relative min-h-0 flex-1">
-              <motion.div
-                style={{ position: 'absolute' }}
-                animate={{ top: botRect.top, left: botRect.left, width: botRect.size, height: botRect.size }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className="z-10"
-              >
+              <motion.div style={{ position: 'absolute' }} animate={botControls} className="z-10">
                 <RobotAvatar3D className="h-full w-full" expression={expression} />
               </motion.div>
 

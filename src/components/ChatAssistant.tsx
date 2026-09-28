@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
 import RobotAvatar from './ui/RobotAvatar';
+import RobotAvatar3D from './ui/RobotAvatar3D';
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 const MAX_MESSAGE_LENGTH = 600;
@@ -131,7 +132,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
             {/* Header */}
             <div className="flex shrink-0 items-center gap-2.5 justify-between border-b border-white/10 px-4 py-3">
               <div className="flex items-center gap-2.5">
-                <RobotAvatar className="h-8 w-8 shrink-0" />
+                <RobotAvatar3D className="h-10 w-10 shrink-0" />
                 <div>
                   <div className="text-[14px] font-semibold text-white">Chat with Krishan&rsquo;s AI</div>
                   <div className="text-[11px] text-white/45">Usually replies instantly</div>

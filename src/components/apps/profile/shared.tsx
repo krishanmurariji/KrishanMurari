@@ -42,9 +42,11 @@ export const RESUME_URL =
   'https://1drv.ms/b/c/0233c22d7614ece6/IQDVmW6SVwt7RLgAtEfrvYulAU2hpV47FvgAgRQ3Xs4EV5A?e=F8q1BW';
 export const EMAIL = 'murari@krishan.is-a.dev';
 export const GITHUB_URL = 'https://github.com/krishanmurariji';
-export const LINKEDIN_URL = 'https://www.linkedin.com/in/krishansinghmurari/';
+export const LINKEDIN_URL = 'https://www.linkedin.com/in/krishan-murari/';
+export const INSTAGRAM_URL = 'https://www.instagram.com/krishanmurariji/';
+export const TWITTER_URL = 'https://twitter.com/KrishanMuraari';
 export const GITHUB_HANDLE = 'krishanmurariji';
-export const LINKEDIN_HANDLE = 'krishansinghmurari';
+export const LINKEDIN_HANDLE = 'krishan-murari';
 
 // First day actually working — kept as a real date (not a hardcoded "2+
 // years" string) so the displayed experience keeps advancing on its own.
@@ -119,26 +121,6 @@ export function ResumeIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function GitHubGlyph(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.833.092-.647.35-1.088.636-1.338-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.378.202 2.397.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.748 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z" />
-    </svg>
-  );
-}
-
-export function LinkedInGlyph(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <rect x="2" y="2" width="20" height="20" rx="4" stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="7.4" cy="7.8" r="1.3" fill="currentColor" />
-      <path d="M7.4 10.8v6.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M11.6 17.2v-4a2.3 2.3 0 0 1 4.6 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M11.6 10.8v1.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function MailGlyph(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -170,8 +152,3 @@ export function ChevronRightGlyph(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export const SOCIAL_LINKS = [
-  { label: 'GitHub', href: GITHUB_URL, Icon: GitHubGlyph },
-  { label: 'LinkedIn', href: LINKEDIN_URL, Icon: LinkedInGlyph },
-  { label: 'Email', href: `mailto:${EMAIL}`, Icon: MailGlyph },
-];

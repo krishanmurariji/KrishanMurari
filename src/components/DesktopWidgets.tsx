@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { useYouTubePlayer } from '../lib/youtube-player';
 import { GlassBackdrop } from './GlassBackdrop';
-import { NAME, BIO, EMAIL, MailGlyph } from './apps/profile/shared';
+import { NAME, BIO, EMAIL, MailGlyph, GITHUB_URL, LINKEDIN_URL, INSTAGRAM_URL, TWITTER_URL } from './apps/profile/shared';
 import ChatAssistant from './ChatAssistant';
 import RobotAvatar3D from './ui/RobotAvatar3D';
 
@@ -729,15 +729,14 @@ function LinkedInIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-// This widget's own copy of the social row, not shared.tsx's SOCIAL_LINKS —
-// the URLs the user gave for this row (LinkedIn/Instagram in particular)
-// differ from the ones Profile's own footer already uses, so this stays
-// scoped here rather than overwriting that shared, site-wide list.
+// This widget's own social row — same brand-colored icon style as the rest
+// of this file, but the URLs themselves come from shared.tsx (the single
+// source of truth every other social link on the site also uses).
 const PHOTO_SOCIAL_LINKS = [
-  { label: 'GitHub', href: 'https://github.com/krishanmurariji', Icon: GitHubIcon, brand: '#333333' },
-  { label: 'Instagram', href: 'https://www.instagram.com/krishanmurariji/', Icon: InstagramIcon, brand: '#e4405f' },
-  { label: 'Twitter', href: 'https://twitter.com/KrishanMuraari', Icon: TwitterIcon, brand: '#1da1f2' },
-  { label: 'LinkedIn', href: 'https://linkedin.com/in/krishan-murari/', Icon: LinkedInIcon, brand: '#0077b5' },
+  { label: 'GitHub', href: GITHUB_URL, Icon: GitHubIcon, brand: '#333333' },
+  { label: 'Instagram', href: INSTAGRAM_URL, Icon: InstagramIcon, brand: '#e4405f' },
+  { label: 'Twitter', href: TWITTER_URL, Icon: TwitterIcon, brand: '#1da1f2' },
+  { label: 'LinkedIn', href: LINKEDIN_URL, Icon: LinkedInIcon, brand: '#0077b5' },
 ];
 
 // A small circular icon button whose brand color fills up from the bottom

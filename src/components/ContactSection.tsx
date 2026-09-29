@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { GITHUB_URL, LINKEDIN_URL, INSTAGRAM_URL, TWITTER_URL } from './apps/profile/shared';
 
 type Phase = 'incoming-hidden' | 'incoming' | 'unfolding' | 'idle' | 'folding' | 'flying-out';
 
@@ -314,10 +315,10 @@ function FooterBar({ isLight }: { isLight?: boolean }) {
   const currentYear = new Date().getFullYear();
 
   const socials = [
-    { label: 'GH',  href: 'https://github.com/mrkrishanmurariji' },
-    { label: 'LI',  href: 'https://www.linkedin.com/in/krishansinghmurari/' },
-    { label: 'IG',  href: 'https://instagram.com' },
-    { label: 'X',   href: 'https://twitter.com' },
+    { label: 'GH',  href: GITHUB_URL },
+    { label: 'LI',  href: LINKEDIN_URL },
+    { label: 'IG',  href: INSTAGRAM_URL },
+    { label: 'X',   href: TWITTER_URL },
   ];
 
   return (

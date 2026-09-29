@@ -9,10 +9,10 @@
 // decorative detail.
 //
 // A full chibi character (round head + torso + arms + legs), not just a
-// head: big round teal eyes with a dark outline ring, orange ears and
-// antenna tips, and a white glossy body with orange joints/feet accents.
-// Head details (eyes, brows, mouth, blush, antenna, stars) live in their
-// own local coordinate space inside a head group offset up by
+// head: one big round teal cyclops eye with a dark outline ring, orange
+// ears and antenna tips, and a white glossy body with orange joints/feet
+// accents. Head details (eye, brow, mouth, blush, antenna, stars) live in
+// their own local coordinate space inside a head group offset up by
 // HEAD_Y_OFFSET; the body is built as siblings below it in the same
 // animated outer group, so the existing idle bob/tilt sways the whole
 // character together for free.
@@ -45,6 +45,12 @@ const BLUSH_COLOR = '#ffb3c6';
 const BROW_COLOR = '#2a3140';
 const MOUTH_COLOR = '#2a3140';
 const STAR_COLOR = '#ffd54f';
+
+// The single cyclops eye is one enlarged instance of the same Eye layout
+// two eyes used to share, rather than hand-edited geometry — scaling the
+// eye's own group keeps every inner layer (ring/iris/pupil/sparkle)
+// proportional for free.
+const EYE_SCALE = 1.7;
 
 // The head group's vertical offset in the outer (whole-character) space —
 // everything inside it (eyes, brows, mouth, ears, antenna, blush, stars)
@@ -85,11 +91,9 @@ const MOUTH_CENTER_SMILE = (3 * Math.PI) / 2;
 const MOUTH_CENTER_FROWN = Math.PI / 2;
 
 interface ExpressionTarget {
-  browLZ: number;
-  browRZ: number;
-  browLY: number;
-  browRY: number;
-  browCurve: number; // 0 = straight bar, 1 = gently arched
+  browTilt: number; // z-rotation of the whole single brow, for a jaunty/skeptical slant
+  browY: number;
+  browCurve: number; // 1 = gently arched, 0 = straight bar, -1 = furrowed V-dip
   mouthFlip: number; // 0 = smile, 1 = frown
   mouthScaleX: number;
   mouthScaleY: number;
@@ -110,10 +114,8 @@ const ANTENNA_BASE_TILT = 0.3;
 
 const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
   normal: {
-    browLZ: 0,
-    browRZ: 0,
-    browLY: 0.29,
-    browRY: 0.29,
+    browTilt: 0,
+    browY: 0.42,
     browCurve: 1,
     mouthFlip: 0,
     mouthScaleX: 1,
@@ -123,13 +125,11 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
     blush: 0.55,
     stars: 0,
   },
-  // The big welcome grin — a bigger, rounder smile and gently arched brows,
-  // shown right when the chat panel opens.
+  // The big welcome grin — a bigger, rounder smile and a slightly raised
+  // single brow, shown right when the chat panel opens.
   happy: {
-    browLZ: -0.08,
-    browRZ: 0.08,
-    browLY: 0.305,
-    browRY: 0.305,
+    browTilt: 0,
+    browY: 0.44,
     browCurve: 1,
     mouthFlip: 0,
     mouthScaleX: 1.25,
@@ -139,12 +139,10 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
     blush: 0.75,
     stars: 0,
   },
-  // A quizzical, one-eyebrow-raised look with a small pursed mouth.
+  // A quizzical, jauntily slanted single brow with a small pursed mouth.
   thinking: {
-    browLZ: -0.05,
-    browRZ: 0.32,
-    browLY: 0.29,
-    browRY: 0.34,
+    browTilt: 0.32,
+    browY: 0.43,
     browCurve: 1,
     mouthFlip: 0,
     mouthScaleX: 0.55,
@@ -154,15 +152,14 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
     blush: 0.35,
     stars: 0,
   },
-  // A sharp inward "V" brow, a flipped/reddened mouth, and a little ring of
-  // confusion stars circling the head — a bad/rejected input reads as "Om
-  // is confused and a bit annoyed", not just a flat error color.
+  // A single furrowed V-brow pulled down close to the eye, a flipped/
+  // reddened mouth, and a little ring of confusion stars circling the
+  // head — a bad/rejected input reads as "Om is confused and a bit
+  // annoyed", not just a flat error color.
   angry: {
-    browLZ: 0.5,
-    browRZ: -0.5,
-    browLY: 0.25,
-    browRY: 0.25,
-    browCurve: 0,
+    browTilt: 0,
+    browY: 0.41,
+    browCurve: -1,
     mouthFlip: 1,
     mouthScaleX: 1,
     mouthScaleY: 1,
@@ -178,9 +175,10 @@ const EXPRESSION_TARGETS: Record<BotExpression, ExpressionTarget> = {
 // roughly a quarter second at 60fps.
 const EXPRESSION_LERP = 0.14;
 
-function Eye({ eyeRef, x, ringMat, irisMat, irisDarkMat, pupilMat, sparkleMat }: {
+function Eye({ eyeRef, position, scale = 1, ringMat, irisMat, irisDarkMat, pupilMat, sparkleMat }: {
   eyeRef: RefObject<THREE.Group | null>;
-  x: number;
+  position: [number, number, number];
+  scale?: number;
   ringMat: THREE.Material;
   irisMat: THREE.Material;
   irisDarkMat: THREE.Material;
@@ -188,7 +186,7 @@ function Eye({ eyeRef, x, ringMat, irisMat, irisDarkMat, pupilMat, sparkleMat }:
   sparkleMat: THREE.Material;
 }) {
   return (
-    <group ref={eyeRef} position={[x, 0.05, 0.52]}>
+    <group ref={eyeRef} position={position} scale={scale}>
       <mesh material={ringMat}><sphereGeometry args={[0.2, 24, 24]} /></mesh>
       <mesh position={[0, 0, 0.05]} material={irisMat}><sphereGeometry args={[0.17, 20, 20]} /></mesh>
       {/* A darker inner ring between the iris and pupil approximates the
@@ -206,7 +204,7 @@ function Eye({ eyeRef, x, ringMat, irisMat, irisDarkMat, pupilMat, sparkleMat }:
 // bringing them back to 0 collapses them into one straight line — the same
 // geometry morphs between "curved" (normal/happy/thinking) and "straight"
 // (angry) rather than swapping shapes.
-const BROW_SEG_LEN = 0.11;
+const BROW_SEG_LEN = 0.19;
 
 function Eyebrow({ tiltRef, segARef, segBRef, x, mat }: {
   tiltRef: RefObject<THREE.Group | null>;
@@ -273,15 +271,11 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
   const group = useRef<THREE.Group>(null);
   const antennaL = useRef<THREE.Group>(null);
   const antennaR = useRef<THREE.Group>(null);
-  const leftEye = useRef<THREE.Group>(null);
-  const rightEye = useRef<THREE.Group>(null);
+  const eye = useRef<THREE.Group>(null);
   const mouth = useRef<THREE.Mesh>(null);
-  const browLeftTilt = useRef<THREE.Group>(null);
-  const browLeftSegA = useRef<THREE.Group>(null);
-  const browLeftSegB = useRef<THREE.Group>(null);
-  const browRightTilt = useRef<THREE.Group>(null);
-  const browRightSegA = useRef<THREE.Group>(null);
-  const browRightSegB = useRef<THREE.Group>(null);
+  const browTilt = useRef<THREE.Group>(null);
+  const browSegA = useRef<THREE.Group>(null);
+  const browSegB = useRef<THREE.Group>(null);
   const stars = useRef<THREE.Group>(null);
 
   const headMat = useMemo(() => new THREE.MeshPhysicalMaterial({ color: HEAD_COLOR, roughness: 0.25, metalness: 0.05, clearcoat: 0.6, clearcoatRoughness: 0.25 }), []);
@@ -329,9 +323,8 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
     if (
-      !group.current || !antennaL.current || !antennaR.current || !leftEye.current || !rightEye.current || !mouth.current || !stars.current ||
-      !browLeftTilt.current || !browLeftSegA.current || !browLeftSegB.current ||
-      !browRightTilt.current || !browRightSegA.current || !browRightSegB.current
+      !group.current || !antennaL.current || !antennaR.current || !eye.current || !mouth.current || !stars.current ||
+      !browTilt.current || !browSegA.current || !browSegB.current
     ) return;
 
     // Chase this frame's expression target regardless of reduced-motion —
@@ -341,10 +334,8 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     const target = EXPRESSION_TARGETS[expression];
     const s = smoothed.current;
     const lerp = (a: number, b: number) => a + (b - a) * EXPRESSION_LERP;
-    s.browLZ = lerp(s.browLZ, target.browLZ);
-    s.browRZ = lerp(s.browRZ, target.browRZ);
-    s.browLY = lerp(s.browLY, target.browLY);
-    s.browRY = lerp(s.browRY, target.browRY);
+    s.browTilt = lerp(s.browTilt, target.browTilt);
+    s.browY = lerp(s.browY, target.browY);
     s.browCurve = lerp(s.browCurve, target.browCurve);
     s.mouthFlip = lerp(s.mouthFlip, target.mouthFlip);
     s.mouthScaleX = lerp(s.mouthScaleX, target.mouthScaleX);
@@ -354,15 +345,11 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     s.mouthColorObj.lerp(new THREE.Color(target.mouthColor), EXPRESSION_LERP);
     s.browColorObj.lerp(new THREE.Color(target.browColor), EXPRESSION_LERP);
 
-    browLeftTilt.current.rotation.z = s.browLZ;
-    browRightTilt.current.rotation.z = s.browRZ;
-    browLeftTilt.current.position.y = s.browLY;
-    browRightTilt.current.position.y = s.browRY;
+    browTilt.current.rotation.z = s.browTilt;
+    browTilt.current.position.y = s.browY;
     const browBend = s.browCurve * BROW_BEND;
-    browLeftSegA.current.rotation.z = browBend;
-    browLeftSegB.current.rotation.z = -browBend;
-    browRightSegA.current.rotation.z = browBend;
-    browRightSegB.current.rotation.z = -browBend;
+    browSegA.current.rotation.z = browBend;
+    browSegB.current.rotation.z = -browBend;
     browMat.color.copy(s.browColorObj);
     mouthMat.color.copy(s.mouthColorObj);
     blushMat.opacity = s.blush;
@@ -380,12 +367,10 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     if (reducedMotion) {
       group.current.rotation.set(0, 0, 0);
       group.current.position.y = 0;
-      leftEye.current.rotation.set(0, 0, 0);
-      rightEye.current.rotation.set(0, 0, 0);
+      eye.current.rotation.set(0, 0, 0);
       antennaL.current.rotation.z = -ANTENNA_BASE_TILT;
       antennaR.current.rotation.z = ANTENNA_BASE_TILT;
-      leftEye.current.scale.y = 1;
-      rightEye.current.scale.y = 1;
+      eye.current.scale.setScalar(EYE_SCALE);
       mouth.current.rotation.z = mouthCenter - MOUTH_ARC / 2;
       mouth.current.scale.set(s.mouthScaleX, s.mouthScaleY, 1);
       return;
@@ -415,8 +400,7 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     const my = mouseSmoothed.current.y * lookFade;
     group.current.rotation.y = mx * 0.5;
     group.current.rotation.x = -my * 0.2;
-    leftEye.current.rotation.set(my * 0.2, mx / 3, 0);
-    rightEye.current.rotation.set(my * 0.2, mx / 3, 0);
+    eye.current.rotation.set(my * 0.2, mx / 3, 0);
 
     antennaL.current.rotation.z = -ANTENNA_BASE_TILT + Math.sin(t * 1.3 + 1) * 0.12;
     antennaR.current.rotation.z = ANTENNA_BASE_TILT + Math.sin(t * 1.3 + 1.6) * -0.12;
@@ -424,9 +408,8 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     const blinkStart = BLINK_INTERVAL - BLINK_DURATION;
     let blink = 0;
     if (cyclePos > blinkStart) { blink = Math.sin(((cyclePos - blinkStart) / BLINK_DURATION) * Math.PI); }
-    const eyeScale = 1 - blink * 0.85;
-    leftEye.current.scale.y = eyeScale;
-    rightEye.current.scale.y = eyeScale;
+    eye.current.scale.x = eye.current.scale.z = EYE_SCALE;
+    eye.current.scale.y = EYE_SCALE * (1 - blink * 0.85);
     mouth.current.rotation.z = mouthCenter - MOUTH_ARC / 2;
     mouth.current.scale.set(s.mouthScaleX * (1 + blink * 0.12), s.mouthScaleY, 1);
   });
@@ -451,17 +434,14 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
         <mesh position={[-0.6, -0.02, 0]} material={accentMat}><sphereGeometry args={[0.155, 20, 20]} /></mesh>
         <mesh position={[0.6, -0.02, 0]} material={accentMat}><sphereGeometry args={[0.155, 20, 20]} /></mesh>
         <mesh material={headMat}><sphereGeometry args={[0.6, 28, 28]} /></mesh>
-        {/* Small forehead sensor dots, above the eyes and below the
-            antennae. */}
-        <mesh position={[-0.11, 0.33, 0.555]} material={jointMat}><sphereGeometry args={[0.018, 8, 8]} /></mesh>
-        <mesh position={[0.11, 0.33, 0.555]} material={jointMat}><sphereGeometry args={[0.018, 8, 8]} /></mesh>
-        <Eye eyeRef={leftEye} x={-0.205} ringMat={eyeRingMat} irisMat={eyeIrisMat} irisDarkMat={eyeIrisDarkMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
-        <Eye eyeRef={rightEye} x={0.205} ringMat={eyeRingMat} irisMat={eyeIrisMat} irisDarkMat={eyeIrisDarkMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
-        <Eyebrow tiltRef={browLeftTilt} segARef={browLeftSegA} segBRef={browLeftSegB} x={-0.24} mat={browMat} />
-        <Eyebrow tiltRef={browRightTilt} segARef={browRightSegA} segBRef={browRightSegB} x={0.24} mat={browMat} />
-        <mesh position={[-0.42, -0.08, 0.42]} rotation={[0, 0.5, 0]} material={blushMat}><circleGeometry args={[0.1, 16]} /></mesh>
-        <mesh position={[0.42, -0.08, 0.42]} rotation={[0, -0.5, 0]} material={blushMat}><circleGeometry args={[0.1, 16]} /></mesh>
-        <mesh ref={mouth} position={[0, -0.16, 0.56]} material={mouthMat}>
+        {/* Single forehead sensor dot, centered above the eye and below
+            the antennae. */}
+        <mesh position={[0, 0.48, 0.37]} material={jointMat}><sphereGeometry args={[0.018, 8, 8]} /></mesh>
+        <Eye eyeRef={eye} position={[0, 0.02, 0.57]} scale={EYE_SCALE} ringMat={eyeRingMat} irisMat={eyeIrisMat} irisDarkMat={eyeIrisDarkMat} pupilMat={pupilMat} sparkleMat={sparkleMat} />
+        <Eyebrow tiltRef={browTilt} segARef={browSegA} segBRef={browSegB} x={0} mat={browMat} />
+        <mesh position={[-0.44, -0.24, 0.38]} rotation={[0, 0.5, 0]} material={blushMat}><circleGeometry args={[0.1, 16]} /></mesh>
+        <mesh position={[0.44, -0.24, 0.38]} rotation={[0, -0.5, 0]} material={blushMat}><circleGeometry args={[0.1, 16]} /></mesh>
+        <mesh ref={mouth} position={[0, -0.38, 0.46]} material={mouthMat}>
           <torusGeometry args={[0.1, 0.018, 8, 24, MOUTH_ARC]} />
         </mesh>
         <group ref={stars} position={[0, 0.75, 0]} scale={0}>

@@ -8,11 +8,11 @@ import type { SVGProps } from 'react';
 export const NAME = 'Krishan Murari';
 export const DESIGNATION = 'Full Stack Developer';
 export const LOCATION = 'Mohali, Punjab, India';
-// A short, general "who I am" line for tight spaces (the Photo widget's
-// hover card) — kept free of stack/product specifics, which live in
-// ABOUT_ME below for the fuller Profile page instead.
+// A short "who I am" line for tight spaces (the Photo widget's hover
+// card) — the same bio text now used on GitHub/Twitter, so the site
+// matches those profiles rather than reading as a different voice.
 export const BIO =
-  "I'm a software engineer who loves building things that solve real problems. Always curious, always learning, and always up for a new challenge.";
+  'Full Stack Developer building scalable apps with C#, ASP.NET Core & Angular — integrating AI (GPT-4o, MCP) into real HRMS, telehealth & SaaS products.';
 // Polished, website-ready rewrite of the resume's Professional Summary
 // paragraph — same facts (2+ yrs, the stack, the AI integrations, the HRMS/
 // telehealth/SaaS delivery), just rewritten in first person with smoother

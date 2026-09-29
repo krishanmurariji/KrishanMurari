@@ -10,8 +10,9 @@ import AppWindow, { useSharedSnapshots } from './components/AppWindow';
 import Scene from './components/Scene';
 import MenuBar from './components/MenuBar';
 import DesktopWidgets from './components/DesktopWidgets';
+import ChatAssistant from './components/ChatAssistant';
 // import { SmoothCursor } from './components/ui/smooth-cursor'; // disabled per request — keeping the component around in case it's wanted back later
-import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon } from './components/MacIcons';
+import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon, OmIcon } from './components/MacIcons';
 import SignOutConfirm from './components/SignOutConfirm';
 import { loadBool, saveBool, loadStringArray, saveStringArray, loadNumber, saveNumber, saveAuthUser, clearAuthUser, loadAuthUser, type AuthUser, PROVIDER_LABELS } from './lib/storage';
 import { WIDGET_IDS, type WidgetId } from './components/DesktopWidgets';
@@ -54,6 +55,10 @@ export default function App() {
   // Confirmation for the terminal's `signout` command — see TerminalWindow's
   // `signout` entry, which just opens this instead of acting immediately.
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+  // The Om chat panel — lives here (not inside DesktopWidgets' PhotoCard,
+  // where it used to) so both the Photo widget's bot button and the dock's
+  // Om icon drive the same conversation instead of each opening its own.
+  const [chatOpen, setChatOpen] = useState(false);
   const confirmSignOut = useCallback(() => {
     clearAuthUser();
     setAuthUser(null);
@@ -155,6 +160,12 @@ export default function App() {
       kind: 'placeholder',
       handle: 'murari@krishan.is-a.dev',
     },
+    // Doesn't open a real AppWindow — handleDockSelect below opens the Om
+    // chat panel instead. Still a normal DockApp (so it gets the same
+    // hover-magnify tile and a harmless snapshot-capture fallback) with a
+    // plain flat icon rather than a live 3D one — see OmIcon's own comment
+    // for why.
+    { id: 'chat', label: 'Chat with Om', icon: OmIcon, kind: 'placeholder' },
   ], []);
 
   // Captured once, upfront, for every app — see useSharedSnapshots' own
@@ -165,6 +176,10 @@ export default function App() {
   // minimized), and minimize whatever other app was frontmost — never close
   // or discard it, just background it, exactly like real multi-tasking.
   const handleDockSelect = useCallback((id: string, rect: DockRect) => {
+    if (id === 'chat') {
+      setChatOpen(true);
+      return;
+    }
     setSessions((prev) => {
       const next: Record<string, Session> = {};
       for (const [key, s] of Object.entries(prev)) {
@@ -340,7 +355,9 @@ export default function App() {
           music={{ playing, onTogglePlay: togglePlay, onSkip: restartTrack, trackTitle: TRACK_TITLE, trackArtist: TRACK_ARTIST }}
           sceneCanvasRef={sceneCanvasRef}
           isLight={isLight}
+          onOpenChat={() => setChatOpen(true)}
         />
+        <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} />
 
         {/* Dimmed + frozen while editing widgets — same "everything else
             fades into the background" behavior as real macOS/iOS widget

@@ -19,7 +19,6 @@ import { cn } from '../lib/utils';
 import { useYouTubePlayer } from '../lib/youtube-player';
 import { GlassBackdrop } from './GlassBackdrop';
 import { NAME, BIO, EMAIL, MailGlyph, GITHUB_URL, LINKEDIN_URL, INSTAGRAM_URL, TWITTER_URL } from './apps/profile/shared';
-import ChatAssistant from './ChatAssistant';
 import RobotAvatar3D from './ui/RobotAvatar3D';
 
 // Below this, each corner group shrinks in place via a plain transform
@@ -786,7 +785,10 @@ function SocialIconButton({
   );
 }
 
-function PhotoCard({ isLight = true }: { isLight?: boolean }) {
+// onOpenChat is optional so the widget-gallery preview instance (see
+// WIDGET_PREVIEWS['photo'] above) can render this same card without a real
+// chat to open — its bot button just no-ops there.
+function PhotoCard({ isLight = true, onOpenChat }: { isLight?: boolean; onOpenChat?: () => void }) {
   // Photos that have actually failed to load at runtime (vs. the
   // known-bad ones above, which were never added) get dropped from the
   // rotation instead of leaving a broken-image icon on screen.
@@ -794,7 +796,6 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
   const livePhotos = PHOTOS.filter((p) => !failedUrls.includes(p.url));
   const [index, setIndex] = useState(0);
   const [hovered, setHovered] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setIndex((i) => (i + 1) % Math.max(livePhotos.length, 1)), PHOTO_INTERVAL_MS);
@@ -899,23 +900,19 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
               <SocialIconButton key={label} label={label} href={href} Icon={Icon} brand={brand} isLight={isLight} />
             ))}
           </div>
+          {/* Just the bot, no button chrome — its own idle animation and
+              mouse-tracking gaze (trackMouse) are the affordance here rather
+              than a labeled pill. */}
           <button
             type="button"
-            onClick={() => setChatOpen(true)}
-            className={cn(
-              'flex items-center gap-1 rounded-full py-1 pl-1 pr-2.5 text-[0.65rem] font-medium transition-colors',
-              isLight
-                ? 'bg-black/10 text-black hover:bg-black hover:!text-white'
-                : 'bg-white/15 text-white hover:bg-white hover:!text-[#423f3a]'
-            )}
+            onClick={() => onOpenChat?.()}
+            aria-label="Chat with Om"
+            className="shrink-0 rounded-full transition-transform hover:scale-110"
           >
-            <RobotAvatar3D className="h-5 w-5 shrink-0" />
-            Chat Now
+            <RobotAvatar3D className="h-9 w-9" trackMouse />
           </button>
         </div>
       </div>
-
-      <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }
@@ -995,6 +992,7 @@ export default function DesktopWidgets({
   music,
   sceneCanvasRef,
   isLight,
+  onOpenChat,
 }: {
   isLoading?: boolean;
   editMode: boolean;
@@ -1003,6 +1001,10 @@ export default function DesktopWidgets({
   music: MusicPlaybackProps;
   sceneCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
   isLight?: boolean;
+  /** Opens the shared Om chat panel — rendered once at the App level so the
+   * dock's own Om icon and this widget's bot button drive the same
+   * conversation instead of each getting their own. */
+  onOpenChat?: () => void;
 }) {
   const has = (id: WidgetId) => visibleWidgets.includes(id);
   const stackRef = useRef<HTMLDivElement>(null);
@@ -1052,7 +1054,7 @@ export default function DesktopWidgets({
 
   const photoGroup = has('photo') && (
     <EditableWidget editMode={editMode} onRemove={() => onRemoveWidget('photo')}>
-      <PhotoCard isLight={isLight} />
+      <PhotoCard isLight={isLight} onOpenChat={onOpenChat} />
     </EditableWidget>
   );
 

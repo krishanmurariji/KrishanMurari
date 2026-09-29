@@ -59,7 +59,11 @@
          links) when someone searches "Krishan Murari" by name, rather than
          just a plain blue link. The `sameAs` URLs are the same ones this
          site's own footer/profile pages use (see shared.tsx), kept in sync
-         by hand since this file can't import from src/. -->
+         by hand since this file can't import from src/. worksFor/alumniOf/
+         knowsAbout/address are extra identity signals beyond the original
+         name/url/sameAs core — more for Google to match this person against
+         when resolving a name search, from the same resume facts as the
+         rest of the site (no new claims). -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -70,6 +74,30 @@
         "jobTitle": "Full Stack Developer",
         "description": "Full Stack Developer building scalable web applications with C#, ASP.NET Core, Angular, and TypeScript.",
         "email": "mailto:murari@krishan.is-a.dev",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Mohali, Punjab",
+          "addressCountry": "IN"
+        },
+        "worksFor": {
+          "@type": "Organization",
+          "name": "Ariel Software Solutions Pvt. Ltd."
+        },
+        "alumniOf": {
+          "@type": "CollegeOrUniversity",
+          "name": "I.K. Gujral Punjab Technical University"
+        },
+        "knowsAbout": [
+          "C#",
+          "ASP.NET Core",
+          "Angular",
+          "TypeScript",
+          "REST API Design",
+          "SQL Server",
+          "Microsoft Azure",
+          "OpenAI GPT-4o",
+          "Model Context Protocol"
+        ],
         "sameAs": [
           "https://github.com/krishanmurariji",
           "https://www.linkedin.com/in/krishan-murari/",

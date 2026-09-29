@@ -62,6 +62,17 @@ const BODY_SCALE = 0.68;
 const BODY_ANCHOR_Y = 0.08;
 const BODY_GROUP_Y = BODY_ANCHOR_Y * (1 - BODY_SCALE);
 
+// A "flying robot descends and settles" entrance, played once from each
+// mount (t=0 on the character's own Canvas clock): a damped spring pulls
+// the character down from above rest height, overshoots past it, and
+// bounces to a stop — rather than a plain fade/pop into the idle pose.
+// INTRO_LOOK_FADE staggers the mouse-look in behind it, so the character
+// visibly "wakes up" before it starts tracking the cursor.
+const INTRO_DROP_HEIGHT = 1.6;
+const INTRO_DECAY = 3.2;
+const INTRO_FREQ = 7.5;
+const INTRO_LOOK_FADE = 1.3;
+
 const BLINK_INTERVAL = 3.4;
 const BLINK_DURATION = 0.22;
 const MOUTH_ARC = Math.PI * 0.85;
@@ -260,7 +271,6 @@ function Hand({ position, mat }: { position: [number, number, number]; mat: THRE
 
 function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean; expression: BotExpression; trackMouse?: boolean }) {
   const group = useRef<THREE.Group>(null);
-  const headGroup = useRef<THREE.Group>(null);
   const antennaL = useRef<THREE.Group>(null);
   const antennaR = useRef<THREE.Group>(null);
   const leftEye = useRef<THREE.Group>(null);
@@ -319,7 +329,7 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
     if (
-      !group.current || !headGroup.current || !antennaL.current || !antennaR.current || !leftEye.current || !rightEye.current || !mouth.current || !stars.current ||
+      !group.current || !antennaL.current || !antennaR.current || !leftEye.current || !rightEye.current || !mouth.current || !stars.current ||
       !browLeftTilt.current || !browLeftSegA.current || !browLeftSegB.current ||
       !browRightTilt.current || !browRightSegA.current || !browRightSegB.current
     ) return;
@@ -368,9 +378,10 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     const mouthCenter = MOUTH_CENTER_SMILE + (MOUTH_CENTER_FROWN - MOUTH_CENTER_SMILE) * s.mouthFlip;
 
     if (reducedMotion) {
-      group.current.rotation.z = 0;
+      group.current.rotation.set(0, 0, 0);
       group.current.position.y = 0;
-      headGroup.current.rotation.set(0, 0, 0);
+      leftEye.current.rotation.set(0, 0, 0);
+      rightEye.current.rotation.set(0, 0, 0);
       antennaL.current.rotation.z = -ANTENNA_BASE_TILT;
       antennaR.current.rotation.z = ANTENNA_BASE_TILT;
       leftEye.current.scale.y = 1;
@@ -382,17 +393,30 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     group.current.rotation.z = Math.sin(t * 0.55) * 0.035;
     group.current.position.y = Math.sin(t * 0.85) * 0.03;
 
-    // "Look at the cursor" — a small, eased head turn toward wherever the
-    // mouse is on the page, opt-in via `trackMouse` (the docked/panel bot
+    // Damped-spring "descend and settle" entrance, layered on top of the
+    // idle bob above — decays to a negligible fraction of INTRO_DROP_HEIGHT
+    // within ~1.5s of mount and is never explicitly turned off.
+    group.current.position.y += INTRO_DROP_HEIGHT * Math.exp(-INTRO_DECAY * t) * Math.cos(INTRO_FREQ * t);
+
+    // "Look at the cursor" — the whole character leans/turns toward
+    // wherever the mouse is on the page (not just the head), with the eyes
+    // swiveling a little further within that for a layered, more alive
+    // parallax look, opt-in via `trackMouse` (the docked/panel bot
     // instances don't want the visitor's cursor stealing focus from the
-    // conversation itself). Eased rather than snapped straight to the
-    // target so it reads as a glance, not a twitch.
+    // conversation itself). Eased toward the raw target rather than
+    // snapped straight to it, and faded in over INTRO_LOOK_FADE so the
+    // character visibly wakes up before it starts tracking the cursor.
     const mouseTargetX = trackMouse ? mouseTarget.current.x : 0;
     const mouseTargetY = trackMouse ? mouseTarget.current.y : 0;
     mouseSmoothed.current.x += (mouseTargetX - mouseSmoothed.current.x) * 0.06;
     mouseSmoothed.current.y += (mouseTargetY - mouseSmoothed.current.y) * 0.06;
-    headGroup.current.rotation.y = mouseSmoothed.current.x * 0.3;
-    headGroup.current.rotation.x = mouseSmoothed.current.y * 0.18;
+    const lookFade = Math.min(1, t / INTRO_LOOK_FADE);
+    const mx = mouseSmoothed.current.x * lookFade;
+    const my = mouseSmoothed.current.y * lookFade;
+    group.current.rotation.y = mx * 0.5;
+    group.current.rotation.x = -my * 0.2;
+    leftEye.current.rotation.set(my * 0.2, mx / 3, 0);
+    rightEye.current.rotation.set(my * 0.2, mx / 3, 0);
 
     antennaL.current.rotation.z = -ANTENNA_BASE_TILT + Math.sin(t * 1.3 + 1) * 0.12;
     antennaR.current.rotation.z = ANTENNA_BASE_TILT + Math.sin(t * 1.3 + 1.6) * -0.12;
@@ -411,7 +435,7 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
     <group ref={group}>
       {/* Head — eyes, brows, mouth, ears, antennae, blush and the
           confusion-star ring all live in this head-local space. */}
-      <group ref={headGroup} position={[0, HEAD_Y_OFFSET, 0]}>
+      <group position={[0, HEAD_Y_OFFSET, 0]}>
         <group ref={antennaL} position={[-0.2, 0.56, 0]} rotation={[0, 0, -ANTENNA_BASE_TILT]}>
           <mesh position={[0, 0.09, 0]} material={silverMat}><cylinderGeometry args={[0.014, 0.014, 0.18, 10]} /></mesh>
           <mesh position={[0, 0.19, 0]} material={accentMat}><sphereGeometry args={[0.062, 16, 16]} /></mesh>

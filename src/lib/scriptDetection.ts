@@ -1,6 +1,6 @@
 // Client-side first line of defense against a message that's actually a
 // script/markup injection attempt rather than a real question — lets the
-// UI reject it immediately (and show Om's angry face) without a round trip.
+// UI reject it immediately (and show the bot's angry face) without a round trip.
 // This is a UX nicety only: the server independently re-runs the same check
 // in api/chat.ts / api/_lib/chat.ts, since a client-only check protects
 // nothing against a request sent straight to the endpoint (same reasoning

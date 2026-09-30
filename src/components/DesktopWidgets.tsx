@@ -897,8 +897,8 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
               <SocialIconButton key={label} label={label} href={href} Icon={Icon} brand={brand} isLight={isLight} />
             ))}
           </div>
-          {/* Purely decorative — Om just floats and tracks the cursor here
-              (trackMouse) rather than being clickable; the dock's Messages
+          {/* Purely decorative — the bot just floats and tracks the cursor
+              here (trackMouse) rather than being clickable; the dock's Messages
               icon is the only way to open the chat now (see App.tsx's
               dockApps). Sized and vertically centered to match
               SocialIconButton (h-7 w-7) exactly, so the row reads as one

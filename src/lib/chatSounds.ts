@@ -42,7 +42,7 @@ export function playAngrySound(): void {
   tone(ctx, 140, now + 0.1, 0.18, 'sawtooth', 0.08);
 }
 
-// A soft two-note rising blip that plays once when Om starts "thinking" —
+// A soft two-note rising blip that plays once when the bot starts "thinking" —
 // deliberately not looped, so it never becomes background noise on a slow
 // reply.
 export function playThinkingSound(): void {

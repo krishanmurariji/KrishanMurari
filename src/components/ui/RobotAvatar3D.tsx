@@ -26,7 +26,7 @@
 // same, just orchestrated with gsap.to/gsap.timeline (already a dependency
 // elsewhere in this app) inside React's lifecycle rather than a
 // requestAnimationFrame loop appending to document.body.
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import * as THREE from 'three';
@@ -187,19 +187,27 @@ function Bot({ reducedMotion, expression, trackMouse, onIntroComplete }: { reduc
   const smoothed = useRef({ eyelidsOpening: 0, stars: 0 });
   const flyCoef = useRef(0);
   const introComplete = useRef(false);
+  // Starts hidden and only ever flips true, once, from the layout effect
+  // below — never recomputed from other props — so an unrelated re-render
+  // (an expression change, say) can't stomp it back to false the way a
+  // plain JSX `visible={someExpressionEveryRenderRecomputes}` would.
+  // Without this, the very first frame rendered whatever pose the model's
+  // default transform happened to be in (T-pose/rest, fully visible)
+  // before the effect below had a chance to jump it up to its off-screen
+  // drop-start position — a real one-frame "flash of the bot, then it
+  // vanishes" bug. useLayoutEffect (not useEffect) so this — and the
+  // gsap.set() below that establishes the drop-start position — both run
+  // before the browser ever gets to paint, not after.
+  const [ready, setReady] = useState(false);
 
-  // The original's exact intro sequence — drop from above, tumble, bounce
-  // to rest, then rise back up while the eyelids open — via gsap instead
-  // of TweenMax, same values (converted to our normalized scale for the
-  // position-only tweens on the unscaled outer pivot; everything else is
-  // identical since it's rotation, or a descendant of the scaled group).
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!pivot.current || !modelGroup.current) return;
     introComplete.current = false;
     if (reducedMotion) {
       eyelidTop.rotation.x = THREE.MathUtils.degToRad(EYELID_TOP_OPEN_DEG);
       eyelidBottom.rotation.x = THREE.MathUtils.degToRad(EYELID_BOTTOM_OPEN_DEG);
       introComplete.current = true;
+      setReady(true);
       onIntroComplete?.();
       return;
     }
@@ -214,6 +222,7 @@ function Bot({ reducedMotion, expression, trackMouse, onIntroComplete }: { reduc
     const dropHeight = 15 * scale;
     gsap.set(pivotNode.position, { y: dropHeight });
     gsap.set(pivotNode.rotation, { y: THREE.MathUtils.degToRad(720), z: THREE.MathUtils.degToRad(720) });
+    setReady(true);
 
     const turnOff = gsap.delayedCall(1, () => {
       gsap.to(pivotNode.position, { duration: 1.5, y: 0, ease: 'bounce.out' });
@@ -303,7 +312,7 @@ function Bot({ reducedMotion, expression, trackMouse, onIntroComplete }: { reduc
   });
 
   return (
-    <group ref={pivot}>
+    <group ref={pivot} visible={ready}>
       <group ref={modelGroup} scale={scale}>
         <primitive object={root} />
       </group>

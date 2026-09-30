@@ -50,7 +50,7 @@ export function checkGlobalDailyLimit(name: string, max: number): boolean {
 // Rejects a message that's actually a script/markup injection attempt
 // rather than a real question — the server-side twin of
 // src/lib/scriptDetection.ts's identical check. The client-side copy is a
-// UX nicety only (instant rejection + Om's angry face, no round trip); this
+// UX nicety only (instant rejection + the bot's angry face, no round trip); this
 // one is the real gate, since a client-only check protects nothing against
 // a request sent straight at the endpoint.
 const SUSPICIOUS_PATTERNS = [

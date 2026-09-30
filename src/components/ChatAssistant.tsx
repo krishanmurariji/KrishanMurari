@@ -1,10 +1,10 @@
 // The "Chat Now" AI assistant — replaces the Photo widget's old "Contact
 // Me" mailto link (see PhotoCard in DesktopWidgets.tsx). A Gemini-backed
-// assistant named Om, grounded in Krishan's real resume/experience data
-// (the system prompt lives server-side only — see
-// api/_lib/assistant-knowledge.ts / api/chat.ts, never shipped to the
-// client), so it can answer questions about his background on his behalf
-// without inventing anything.
+// assistant named "I" (a pun — one eye — formerly "Om"), grounded in
+// Krishan's real resume/experience data (the system prompt lives
+// server-side only — see api/_lib/assistant-knowledge.ts / api/chat.ts,
+// never shipped to the client), so it can answer questions about his
+// background on his behalf without inventing anything.
 //
 // Rendered via a portal straight onto `document.body` rather than in place
 // — this is opened from deep inside DesktopWidgets/PhotoCard, and a plain
@@ -24,18 +24,19 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
 import RobotAvatar3D, { type BotExpression } from './ui/RobotAvatar3D';
-import { usePrefersReducedMotion } from '../lib/useReducedMotion';
+import TextType from './ui/TextType';
+import CursorGrid from './ui/CursorGrid';
 import { containsUnsafeContent } from '../lib/scriptDetection';
 import { playAngrySound, playThinkingSound, playReplySound } from '../lib/chatSounds';
 
-// How long Om's angry expression holds before easing back to normal on its
+// How long the angry expression holds before easing back to normal on its
 // own — long enough to register as a reaction, short enough not to still be
 // scowling by the time the visitor has fixed their message.
 const ANGRY_HOLD_MS = 1800;
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 const MAX_MESSAGE_LENGTH = 600;
-const GREETING = "Hey, I'm Om! How can I assist you?";
+const GREETING = 'Hi, I is here to assist you';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -64,33 +65,6 @@ declare global {
   }
 }
 
-function TypewriterGreeting({ text }: { text: string }) {
-  const reducedMotion = usePrefersReducedMotion();
-  const [shown, setShown] = useState(reducedMotion ? text.length : 0);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      setShown(text.length);
-      return;
-    }
-    setShown(0);
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      setShown(i);
-      if (i >= text.length) window.clearInterval(id);
-    }, 28);
-    return () => window.clearInterval(id);
-  }, [text, reducedMotion]);
-
-  return (
-    <p className="max-w-md text-center text-lg font-medium text-white sm:text-xl">
-      {text.slice(0, shown)}
-      {shown < text.length && <span className="animate-pulse">▍</span>}
-    </p>
-  );
-}
-
 export default function ChatAssistant({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -105,17 +79,20 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   const contentRef = useRef<HTMLDivElement>(null);
   const angryTimeoutRef = useRef<number | null>(null);
   const [botRect, setBotRect] = useState({ top: 0, left: 0, size: 192 });
-  // Om's own drop-bounce-settle-and-open-eyes intro plays first; the
-  // composer only fades in once that's actually finished (RobotAvatar3D's
-  // onIntroComplete), rather than the whole panel appearing at once.
-  const [composerReady, setComposerReady] = useState(false);
+  // The bot's own drop-bounce-settle-and-open-eyes intro plays out first,
+  // with nothing else on screen — no greeting, no composer — until it's
+  // actually finished (RobotAvatar3D's onIntroComplete): the bot lands,
+  // *then* the greeting types out, *then* the composer fades in. Gates
+  // both the greeting (TextType below) and the composer off this same
+  // flag rather than showing everything the instant the panel opens.
+  const [introDone, setIntroDone] = useState(false);
 
   const hasStarted = messages.length > 0;
   const isFirstMessage = messages.length === 0;
   const speechSupported = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  // Om's expression is derived from what's actually happening rather than
-  // set ad hoc all over the component: a validation/security flash always
+  // The bot's expression is derived from what's actually happening rather
+  // than set ad hoc all over the component: a validation/security flash always
   // wins, then "waiting on the API", then the big welcome grin for the
   // not-yet-started conversation, and otherwise the default smile.
   const expression: BotExpression = angryFlash ? 'angry' : sending ? 'thinking' : !hasStarted ? 'happy' : 'normal';
@@ -240,7 +217,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
       setBotVisible(true);
       setSmokeBurst(null);
       if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
-      setComposerReady(false);
+      setIntroDone(false);
     }
   }, [open]);
 
@@ -251,7 +228,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
     if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
   }, []);
 
-  // Om's reaction to a validation or security problem: a brief angry
+  // The bot's reaction to a validation or security problem: a brief angry
   // expression plus a matching sound, easing back to normal on its own
   // shortly after (or as soon as the visitor starts typing again).
   const flashAngry = () => {
@@ -381,6 +358,26 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
               WebkitBackdropFilter: 'blur(36px) saturate(180%)',
             }}
           >
+            {/* A faint magenta grid that only lights up right around the
+                cursor — pure background ambiance, sits behind everything
+                else in normal DOM order and never intercepts clicks
+                (CursorGrid's own canvas is pointer-events: none). */}
+            <CursorGrid
+              cellSize={70}
+              color="#D946EF"
+              radius={140}
+              falloff="smooth"
+              holdTime={400}
+              fadeDuration={800}
+              lineWidth={1.2}
+              maxOpacity={1}
+              fillOpacity={0}
+              gridOpacity={0}
+              cellRadius={0}
+              clickPulse
+              pulseSpeed={600}
+            />
+
             {/* A soft inner highlight along the top edge — the detail that
                 sells "glass" rather than just "dark translucent panel". */}
             <div
@@ -424,7 +421,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                   transition={{ duration: 0.18 }}
                   className="h-full w-full"
                 >
-                  <RobotAvatar3D className="h-full w-full" expression={expression} onIntroComplete={() => setComposerReady(true)} />
+                  <RobotAvatar3D className="h-full w-full" expression={expression} onIntroComplete={() => setIntroDone(true)} />
                 </motion.div>
               </motion.div>
 
@@ -433,14 +430,27 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
               )}
 
               <AnimatePresence>
-                {!hasStarted && (
+                {/* Only mounts once the bot's own landing has finished
+                    (introDone) — nothing shows here at all while it's
+                    still flying in, per the "land first, then greet"
+                    sequencing above. */}
+                {!hasStarted && introDone && (
                   <motion.div
                     key="greeting"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     className="absolute inset-x-0 top-[38%] flex justify-center px-6 pt-28 sm:pt-36"
                   >
-                    <TypewriterGreeting text={GREETING} />
+                    <TextType
+                      text={GREETING}
+                      typingSpeed={75}
+                      showCursor
+                      cursorCharacter="_"
+                      loop={false}
+                      className="max-w-md text-center text-lg font-medium text-white sm:text-xl"
+                    />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -468,20 +478,20 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
 
             {/* Composer — a single boxed, centered pill near the bottom
                 rather than a full-width bar, with the mic and send controls
-                sitting inside it on the right. Fades in only once Om's own
-                intro has actually finished (composerReady, driven by
-                RobotAvatar3D's onIntroComplete above) — the bot arrives
-                first, then the visitor gets somewhere to type, rather than
-                everything appearing at once. Stays in the tree throughout
-                (not conditionally mounted) so its own fade is simple
-                opacity/y rather than an enter/exit remount; pointer-events
-                is off until ready so it can't be clicked or tabbed into
-                while still invisible. */}
+                sitting inside it on the right. Fades in only once the bot's
+                own intro has actually finished (introDone, driven by
+                RobotAvatar3D's onIntroComplete above) — same gate as the
+                greeting above, so the bot lands, then the visitor gets
+                somewhere to type, rather than everything appearing at once.
+                Stays in the tree throughout (not conditionally mounted) so
+                its own fade is simple opacity/y rather than an enter/exit
+                remount; pointer-events is off until ready so it can't be
+                clicked or tabbed into while still invisible. */}
             <motion.div
               initial={false}
-              animate={{ opacity: composerReady ? 1 : 0, y: composerReady ? 0 : 10 }}
+              animate={{ opacity: introDone ? 1 : 0, y: introDone ? 0 : 10 }}
               transition={{ duration: 0.35, ease: 'easeOut' }}
-              style={{ pointerEvents: composerReady ? 'auto' : 'none' }}
+              style={{ pointerEvents: introDone ? 'auto' : 'none' }}
               className="flex shrink-0 flex-col items-center gap-2 px-6 pb-8 pt-2">
               {error && <div className="rounded-lg bg-red-500/15 px-3 py-1.5 text-[12px] text-red-300">{error}</div>}
 
@@ -504,7 +514,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                   onChange={(e) => {
                     setInput(e.target.value);
                     // Typing again is the visitor fixing whatever tripped
-                    // the angry reaction — Om should look normal again
+                    // the angry reaction — the bot should look normal again
                     // right away rather than still scowling mid-sentence.
                     if (angryFlash) {
                       setAngryFlash(false);
@@ -515,7 +525,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                   disabled={sending}
                   maxLength={MAX_MESSAGE_LENGTH}
                   rows={1}
-                  placeholder="Message Om…"
+                  placeholder="Message I…"
                   className="max-h-28 min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[14px] text-white placeholder:text-white/40 outline-none disabled:opacity-50"
                 />
                 {speechSupported && (

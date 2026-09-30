@@ -89,18 +89,19 @@ export const SpotifyIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-// The dock's icon for the Om chat panel — styled after the real macOS
-// Messages app (a green rounded-square tile with a white speech-bubble
-// glyph) rather than a portrait of Om himself, so it reads at a glance as
-// "open messaging" the way a real dock does. Same "flat image, own
-// background baked in" convention as the icons above — and flat for the
-// same reason as before: the dock's hover-magnify engine (dockbar) resizes
-// tiles by setting real width/height *and* a CSS transform: scale() on the
-// same element in the same frame, and a live react-three-fiber <Canvas>
-// caught in that combination corrupted its own WebGL render when this app
-// hit the same thing elsewhere (see ChatAssistant.tsx's own comment on
-// this) — so this tile stays flat while the widget/chat-panel instances of
-// Om stay the real animated 3D character.
+// The dock's icon for the "I" chat panel (the assistant, formerly named
+// "Om") — styled after the real macOS Messages app (a green rounded-square
+// tile with a white speech-bubble glyph) rather than a portrait of the
+// character himself, so it reads at a glance as "open messaging" the way a
+// real dock does. Same "flat image, own background baked in" convention as
+// the icons above — and flat for the same reason as before: the dock's
+// hover-magnify engine (dockbar) resizes tiles by setting real width/height
+// *and* a CSS transform: scale() on the same element in the same frame,
+// and a live react-three-fiber <Canvas> caught in that combination
+// corrupted its own WebGL render when this app hit the same thing
+// elsewhere (see ChatAssistant.tsx's own comment on this) — so this tile
+// stays flat while the widget/chat-panel instances stay the real animated
+// 3D character.
 export const MessagesIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" {...props}>
     <defs>

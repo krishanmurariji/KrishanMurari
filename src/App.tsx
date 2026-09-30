@@ -55,9 +55,10 @@ export default function App() {
   // Confirmation for the terminal's `signout` command — see TerminalWindow's
   // `signout` entry, which just opens this instead of acting immediately.
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
-  // The Om chat panel — lives here (not inside DesktopWidgets' PhotoCard,
-  // where it used to) so both the Photo widget's bot button and the dock's
-  // Om icon drive the same conversation instead of each opening its own.
+  // The chat panel for "I" (the assistant, formerly "Om" — see
+  // ChatAssistant.tsx) — lives here rather than inside DesktopWidgets'
+  // PhotoCard, since the dock's Messages icon is now the only way to open
+  // it (the Photo widget's bot is purely decorative).
   const [chatOpen, setChatOpen] = useState(false);
   const confirmSignOut = useCallback(() => {
     clearAuthUser();
@@ -150,7 +151,9 @@ export default function App() {
   // every unrelated re-render of App.
   const dockApps: DockApp[] = useMemo(() => [
     { id: 'profile', label: 'Profile', icon: FinderIcon, kind: 'placeholder' },
-    { id: 'experience', label: 'Experience', icon: ExperienceIcon, kind: 'placeholder' },
+    // Commented out per request — leaving ExperienceIcon's import and
+    // ExperienceApp wired elsewhere alone so this is a one-line restore.
+    // { id: 'experience', label: 'Experience', icon: ExperienceIcon, kind: 'placeholder' },
     { id: 'certifications', label: 'Certifications', icon: CertificateIcon, kind: 'placeholder' },
     { id: 'spotify', label: 'Spotify', icon: SpotifyIcon, kind: 'placeholder' },
     {
@@ -160,7 +163,7 @@ export default function App() {
       kind: 'placeholder',
       handle: 'murari@krishan.is-a.dev',
     },
-    // Doesn't open a real AppWindow — handleDockSelect below opens the Om
+    // Doesn't open a real AppWindow — handleDockSelect below opens the
     // chat panel instead. Still a normal DockApp (so it gets the same
     // hover-magnify tile and a harmless snapshot-capture fallback) with a
     // plain flat icon rather than a live 3D one — see MessagesIcon's own

@@ -155,6 +155,11 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // onresult with whatever it transcribed before stop() lands, and a
   // cancelled recording shouldn't have that text land in the composer.
   const dictationCancelledRef = useRef(false);
+  // Set right before every recognitionRef.stop() (not just a cancelled
+  // one) — some browsers fire onerror with error:'aborted' as a side
+  // effect of a perfectly normal stop() rather than a real failure, and
+  // that shouldn't surface as "voice input failed" to the user.
+  const dictationStoppingRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const angryTimeoutRef = useRef<number | null>(null);
 
@@ -303,6 +308,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // gone.
   useEffect(() => {
     if (!open) {
+      dictationStoppingRef.current = true;
       recognitionRef.current?.stop();
       setAngryFlash(false);
       if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
@@ -406,6 +412,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     dictationCancelledRef.current = false;
+    dictationStoppingRef.current = false;
     const recognition = new SR();
     recognition.lang = 'en-US';
     recognition.interimResults = false;
@@ -426,6 +433,12 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
     recognition.onerror = (e) => {
       recognitionRef.current = null;
       if (dictationCancelledRef.current) return;
+      // Some browsers fire this as a side effect of a perfectly normal
+      // stop() (tap-to-stop, hold released) rather than a real failure —
+      // dictationStoppingRef is only set right before *our own* stop()
+      // calls, so an 'aborted' that arrives while it's set is that normal
+      // case, not something to flash an error over.
+      if (e.error === 'aborted' && dictationStoppingRef.current) return;
       const message =
         e.error === 'not-allowed' || e.error === 'service-not-allowed'
           ? 'Microphone access is blocked — check your browser/site permissions and try again.'
@@ -433,7 +446,13 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
             ? "Couldn't find a microphone to record from."
             : e.error === 'no-speech'
               ? "Didn't catch that — try again."
-              : 'Voice input failed — please type your message instead.';
+              : e.error === 'network'
+                ? 'Voice input needs a network connection to work — check your connection and try again.'
+                // Includes the raw code (language-not-supported, bad-grammar,
+                // or an 'aborted' that wasn't from our own stop()) — worth
+                // seeing verbatim if this keeps coming up, to add a specific
+                // message for whichever one it actually is.
+                : `Voice input failed (${e.error}) — please type your message instead.`;
       setError(message);
       flashAngry();
     };
@@ -446,6 +465,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // stop reason (tap-to-stop, hold released) keeps it.
   const stopDictation = (cancelled: boolean) => {
     dictationCancelledRef.current = cancelled;
+    dictationStoppingRef.current = true;
     recognitionRef.current?.stop();
   };
 

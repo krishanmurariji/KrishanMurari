@@ -19,9 +19,9 @@
 // multi-turn chat unusable. Per-IP and site-wide daily rate limits (the
 // Gemini free tier's request quota is shared across every visitor, not
 // per-visitor) are the ongoing defense after that.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
 import RobotAvatar3D, { type BotExpression } from './ui/RobotAvatar3D';
 import TextType from './ui/TextType';
@@ -113,7 +113,6 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   const dictationCancelledRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const angryTimeoutRef = useRef<number | null>(null);
-  const [botRect, setBotRect] = useState({ top: 0, left: 0, size: 192 });
 
   // Genie open — see GENIE_START_SCALE's comment. Computed with
   // useLayoutEffect (not useEffect) so it's in place before the browser
@@ -141,6 +140,18 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // both the greeting (TextType below) and the composer off this same
   // flag rather than showing everything the instant the panel opens.
   const [introDone, setIntroDone] = useState(false);
+  // Gates mounting the bot's <Canvas> until the panel's own entrance
+  // animation (the genie scale-up, or the plain 0.96→1 spring) has
+  // actually finished — react-three-fiber measures its container via
+  // getBoundingClientRect() once at mount to size the canvas, which reads
+  // the ancestor panel's transiently *scaled-down* rect while that
+  // animation is still running; since the wrapper's own CSS size never
+  // changes afterward (it's a fixed Tailwind size, not something animated
+  // in), no ResizeObserver ever fires to correct that first bad read, and
+  // the canvas is stuck rendering at a few pixels for good. Delaying the
+  // mount until the transform has settled means that first measurement is
+  // the real, correct one.
+  const [entranceDone, setEntranceDone] = useState(false);
 
   const hasStarted = messages.length > 0;
   const isFirstMessage = messages.length === 0;
@@ -156,123 +167,16 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
-  // Drives the bot's move from centered-and-big to a docked header-row icon.
-  // Earlier this animated real top/left/width/height numbers continuously
-  // over ~600ms (a "jump" arc) — safer than a `transform: scale` (which
-  // corrupted the react-three-fiber <Canvas> when combined with a real
-  // resize, confirmed live), but continuously resizing a *live* WebGL
-  // canvas frame-by-frame still glitched on some GPUs, since the browser
-  // has to reallocate the framebuffer on every intermediate size. The fix
-  // here sidesteps resizing the canvas while it's visible at all: the bot
-  // vanishes in a puff of smoke at the hero spot, snaps instantly to its
-  // docked size/position while invisible, then reappears in a second puff —
-  // a "dash". The smoke itself is plain DOM/CSS (SmokePuff below), never
-  // touching the canvas, so it can't glitch the same way. Once docked, the
-  // bot sits in a header strip at the very top of the panel (not floating
-  // over the transcript) — the close button and the transcript's own top
-  // offset are both derived from this same rect so all three stay visually
-  // aligned as one header row.
-  const botControls = useAnimationControls();
-  const isFirstBotRectRef = useRef(true);
-  const wasStartedRef = useRef(hasStarted);
-  const [botVisible, setBotVisible] = useState(true);
-  const [smokeBurst, setSmokeBurst] = useState<{ key: number; top: number; left: number; size: number } | null>(null);
-  const dashTimeoutRef = useRef<number | null>(null);
-
-  // Every fresh open (including reopening a conversation that already has
-  // messages) should just snap the bot into its correct spot, never replay
-  // the dash — the dash is reserved for the one live moment a conversation
-  // actually starts while the panel is already open.
-  useEffect(() => {
-    if (open) isFirstBotRectRef.current = true;
-  }, [open]);
-
-  // Pulled out of the effect below (and into useCallback, so both that
-  // effect and the panel's onAnimationComplete can share the exact same
-  // function) rather than measuring on every mount unconditionally — see
-  // that effect's own comment for why the *first* call has to be deferred
-  // past the entrance transition.
-  const applyBotRect = useCallback(() => {
-    const el = contentRef.current;
-    if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-
-    const dockedSize = width < 640 ? 56 : width < 768 ? 64 : 72;
-    const dockedLeft = width < 640 ? 20 : 28;
-    const dockedRect = { top: 20, left: dockedLeft, size: dockedSize };
-
-    const heroSize = width < 640 ? 144 : 192;
-    const heroRect = { top: height * 0.38 - heroSize / 2, left: width / 2 - heroSize / 2, size: heroSize };
-
-    const target = hasStarted ? dockedRect : heroRect;
-    setBotRect(target);
-
-    const justDocked = !wasStartedRef.current && hasStarted;
-    wasStartedRef.current = hasStarted;
-
-    if (isFirstBotRectRef.current) {
-      // First paint (or reopening an already-started conversation) — snap
-      // straight there, no animation, no dash.
-      isFirstBotRectRef.current = false;
-      botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
-      return;
-    }
-
-    if (justDocked) {
-      const DASH_HIDE_MS = 220;
-      setBotVisible(false);
-      setSmokeBurst({ key: Date.now(), top: heroRect.top, left: heroRect.left, size: heroRect.size });
-
-      if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
-      dashTimeoutRef.current = window.setTimeout(() => {
-        // Resize while invisible — no glitch to see, since nothing is
-        // being rendered on screen during the swap.
-        botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
-        setSmokeBurst({ key: Date.now(), top: target.top, left: target.left, size: target.size });
-        setBotVisible(true);
-      }, DASH_HIDE_MS);
-    } else {
-      // Plain reflow (e.g. a window resize) — smooth, no dash.
-      botControls.start({
-        top: target.top,
-        left: target.left,
-        width: target.size,
-        height: target.size,
-        transition: { type: 'spring', stiffness: 300, damping: 30 },
-      });
-    }
-  }, [hasStarted, botControls]);
-
-  useEffect(() => {
-    if (!open) return;
-    // Skip the very first measurement here — at this point the panel is
-    // still mid entrance transform (scale ramping up from
-    // GENIE_START_SCALE, or 0.96 on a plain open, toward 1 over the next
-    // several hundred ms), so contentRef.getBoundingClientRect() would read
-    // a transiently shrunk box — on a big screen this parked the bot near
-    // the viewport's top-left corner for the rest of the session, since
-    // isFirstBotRectRef made it a one-time snap that nothing after this
-    // ever re-triggered. The panel's own onAnimationComplete below does
-    // that first, accurate measurement once the entrance has actually
-    // finished; this effect only needs to handle later changes (a message
-    // sent, a window resize).
-    if (!isFirstBotRectRef.current) applyBotRect();
-    window.addEventListener('resize', applyBotRect);
-    return () => window.removeEventListener('resize', applyBotRect);
-  }, [open, hasStarted, applyBotRect]);
-
-  // A smoke burst clears itself once its own particle animation has
-  // finished playing.
-  useEffect(() => {
-    if (!smokeBurst) return;
-    const id = window.setTimeout(() => setSmokeBurst(null), 650);
-    return () => window.clearTimeout(id);
-  }, [smokeBurst]);
-
-  // The docked bot's header row: the transcript starts below it (never
-  // beside it, so messages stay flush left instead of squeezed right of a
-  // floating icon).
-  const headerHeight = hasStarted ? botRect.top + botRect.size + 16 : 0;
+  // The bot stays put at the same centered "hero" spot for the panel's
+  // whole lifetime now — it used to dash to a small docked header icon the
+  // moment a conversation started (a whole separate machinery: measuring
+  // contentRef's pixel rect, a vanish-resize-reappear "dash" timed around a
+  // smoke puff, since live-resizing the WebGL canvas while visible could
+  // glitch on some GPUs). Per request, it now just sits behind the
+  // transcript instead of moving — positioned with plain CSS percentages
+  // (see the JSX below) rather than a JS-measured pixel rect, so there's no
+  // rect to get wrong, no resize to glitch, and nothing to keep in sync as
+  // the panel's own entrance animation plays out.
 
   // Stop any in-progress dictation the moment the panel closes, rather than
   // leaving the mic listening in the background after the UI it feeds is
@@ -282,10 +186,8 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
       recognitionRef.current?.stop();
       setAngryFlash(false);
       if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
-      setBotVisible(true);
-      setSmokeBurst(null);
-      if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
       setIntroDone(false);
+      setEntranceDone(false);
     }
   }, [open]);
 
@@ -293,7 +195,6 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // component is gone.
   useEffect(() => () => {
     if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
-    if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
   }, []);
 
   // The bot's reaction to a validation or security problem: a brief angry
@@ -434,20 +335,27 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
             initial={{ scale: originRect ? GENIE_START_SCALE : 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: originRect ? GENIE_START_SCALE : 0.97, opacity: 0 }}
-            // Drives the bot's *first* hero-position measurement (see
-            // applyBotRect's effect above) — deliberately not fired until
-            // this entrance animation actually finishes, since
-            // contentRef's rect reads wrong while this is still mid-scale.
-            onAnimationComplete={() => { if (open) applyBotRect(); }}
+            // Only fires once, for the entrance (this panel's `animate`
+            // target never changes across re-renders, so Framer Motion
+            // doesn't re-run or re-fire this for anything else) — see
+            // entranceDone's own comment for what this unblocks.
+            onAnimationComplete={() => { if (open) setEntranceDone(true); }}
             transition={
               // The default spring (tuned for the old, barely-there
               // 0.96→1 fade) resolves a 0.04→1 genie range in well under
               // 100ms — way too fast to read as "growing out of the dock
-              // icon". DUR below matches AppWindow's own genie timing
-              // (see that file's `DUR = 480`) with an expo-out curve for
-              // the same decelerate-into-place feel as its per-row warp.
+              // icon". Duration matches AppWindow's own genie timing (see
+              // that file's `DUR = 480`) — but critically, so does the
+              // *shape* of the curve: an ease-out (fast-start,
+              // slow-finish) front-loads almost all of a 0.04→1 scale
+              // jump into the first ~100ms, then spends the remaining
+              // ~380ms on a change too small to see — reading as an
+              // instant pop, not a grow. AppWindow's own genie uses a
+              // quadratic ease-*in* (`eIn2 = t => t*t`) instead, which
+              // spreads the motion across the whole duration; this is
+              // that same curve as a cubic-bezier (easeInQuad).
               originRect
-                ? { type: 'tween', duration: 0.48, ease: [0.16, 1, 0.3, 1] }
+                ? { type: 'tween', duration: 0.48, ease: [0.55, 0.085, 0.68, 0.53] }
                 : { type: 'spring', stiffness: 340, damping: 32 }
             }
             className="relative flex h-[88vh] max-h-[580px] w-[94vw] max-w-[760px] flex-col overflow-hidden rounded-[12px] border border-white/15"
@@ -511,20 +419,27 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                   className="w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition"
                   style={{ background: '#ff5f57', cursor: 'pointer' }}
                 />
-                {/* Hidden below sm (640px) per request — red/green stay. */}
+                {/* Hidden below sm (640px) per request — red/green stay.
+                    Full color/opacity like every real AppWindow's own
+                    traffic lights (see WindowChrome — those are never
+                    dimmed either, `disabled` there only ever gates the
+                    offscreen snapshot copies, not a real visible window) —
+                    a dimmed look here read as visibly broken rather than
+                    "a normal macOS title bar with two buttons this panel
+                    doesn't support yet". */}
                 <button
                   type="button"
                   aria-label="Minimize"
                   disabled
                   className="hidden w-3.5 h-3.5 rounded-full border-none sm:block"
-                  style={{ background: '#febc2e', cursor: 'default', opacity: 0.5 }}
+                  style={{ background: '#febc2e', cursor: 'default' }}
                 />
                 <button
                   type="button"
                   aria-label="Fill screen"
                   disabled
                   className="w-3.5 h-3.5 rounded-full border-none"
-                  style={{ background: '#28c840', cursor: 'default', opacity: 0.5 }}
+                  style={{ background: '#28c840', cursor: 'default' }}
                 />
               </div>
               <span
@@ -542,33 +457,20 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
               style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0))' }}
             />
 
-            {/* Main content. The bot is a single, never-unmounted <Canvas>
-                instance throughout — its wrapper's box only ever snaps
-                between two fixed rects (see the effect above for why),
-                never tweens continuously, so the canvas itself is never
-                mid-resize while visible. An inner div fades its opacity for
-                the vanish/reappear "dash", and SmokePuff (plain DOM/CSS,
-                never touching the canvas) sells the illusion of movement in
-                between. This also rules out mounting two <Canvas>
-                instances joined by a shared layoutId to cross-fade between
-                hero and docked: WebGL canvases don't survive that kind of
-                cross-fade cleanly either (confirmed live, corrupted/cropped
-                mid-transition) — the same category of issue as
-                GlassBackdrop's own "backdrop-filter can't reliably sample a
-                WebGL canvas" problem elsewhere in this codebase. */}
+            {/* Main content. The bot sits at a fixed spot (CSS percentage
+                position, not a JS-measured rect) for the panel's whole
+                lifetime — it never docks to a header icon once a
+                conversation starts; it just stays centered, behind the
+                transcript once one appears (z-0 vs the transcript/greeting
+                below at z-10), the same "background presence" a watermark
+                would read as. pointer-events-none since it's now purely
+                decorative behind real content — nothing here should ever
+                intercept a click meant for a message or the composer. */}
             <div ref={contentRef} className="relative min-h-0 flex-1">
-              <motion.div style={{ position: 'absolute' }} animate={botControls} className="z-10">
-                <motion.div
-                  animate={{ opacity: botVisible ? 1 : 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="h-full w-full"
-                >
+              {entranceDone && (
+                <div className="pointer-events-none absolute left-1/2 top-[38%] z-0 h-36 w-36 -translate-x-1/2 -translate-y-1/2 sm:h-48 sm:w-48">
                   <RobotAvatar3D className="h-full w-full" expression={expression} onIntroComplete={() => setIntroDone(true)} />
-                </motion.div>
-              </motion.div>
-
-              {smokeBurst && (
-                <SmokePuff key={smokeBurst.key} top={smokeBurst.top} left={smokeBurst.left} size={smokeBurst.size} />
+                </div>
               )}
 
               <AnimatePresence>
@@ -583,7 +485,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute inset-x-0 top-[38%] flex justify-center px-6 pt-28 sm:pt-36"
+                    className="absolute inset-x-0 top-[38%] z-10 flex justify-center px-6 pt-28 sm:pt-36"
                   >
                     <TextType
                       text={GREETING}
@@ -604,8 +506,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.25, delay: 0.1 }}
-                    className="absolute inset-x-0 bottom-0"
-                    style={{ top: headerHeight, borderTop: '1px solid rgba(255,255,255,0.08)' }}
+                    className="absolute inset-0 z-10"
                   >
                     <div ref={scrollRef} data-lenis-prevent className="no-scrollbar h-full space-y-4 overflow-y-auto px-5 py-6 sm:px-8">
                       {messages.map((m, i) => (
@@ -642,6 +543,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                   ref={turnstileRef}
                   siteKey={TURNSTILE_SITE_KEY}
                   theme="dark"
+                  size="compact"
                   onVerify={setTurnstileToken}
                   onExpire={() => setTurnstileToken(null)}
                   onError={() => setTurnstileToken(null)}
@@ -731,58 +633,6 @@ function ChatBubble({ role, text }: { role: 'user' | 'model'; text: string }) {
         {text}
       </div>
     </motion.div>
-  );
-}
-
-// A puff of smoke at a fixed rect — plain absolutely-positioned/blurred
-// spans animated via ordinary CSS transform (top/left/scale/opacity), never
-// touching the WebGL canvas, so it can't trigger the resize-glitch the dash
-// above is built to avoid. Each particle drifts outward from center and
-// fades; a couple are stretched into short streaks for a "wind" feel rather
-// than a uniform circular poof.
-const SMOKE_PARTICLE_COUNT = 6;
-
-function SmokePuff({ top, left, size }: { top: number; left: number; size: number }) {
-  return (
-    <div
-      style={{ position: 'absolute', top, left, width: size, height: size, pointerEvents: 'none' }}
-      className="z-20"
-    >
-      {Array.from({ length: SMOKE_PARTICLE_COUNT }).map((_, i) => {
-        const angle = (i / SMOKE_PARTICLE_COUNT) * Math.PI * 2;
-        const dist = size * (0.34 + (i % 2) * 0.16);
-        const isStreak = i % 3 === 0;
-        const puffW = isStreak ? size * 0.46 : size * (0.28 + (i % 3) * 0.06);
-        const puffH = isStreak ? size * 0.15 : puffW;
-        return (
-          <motion.span
-            key={i}
-            initial={{
-              opacity: 0.65,
-              scale: 0.4,
-              top: size / 2 - puffH / 2,
-              left: size / 2 - puffW / 2,
-              rotate: (angle * 180) / Math.PI,
-            }}
-            animate={{
-              opacity: 0,
-              scale: 1.5,
-              top: size / 2 - puffH / 2 + Math.sin(angle) * dist,
-              left: size / 2 - puffW / 2 + Math.cos(angle) * dist,
-            }}
-            transition={{ duration: 0.5, delay: (i % 3) * 0.03, ease: 'easeOut' }}
-            style={{
-              position: 'absolute',
-              width: puffW,
-              height: puffH,
-              borderRadius: '9999px',
-              background: 'radial-gradient(circle, rgba(255,255,255,0.9), rgba(195,201,214,0.35) 55%, transparent 72%)',
-              filter: 'blur(3px)',
-            }}
-          />
-        );
-      })}
-    </div>
   );
 }
 

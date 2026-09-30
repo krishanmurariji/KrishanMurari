@@ -51,10 +51,11 @@ export interface TurnstileProps {
   onError?: () => void;
   className?: string;
   theme?: 'light' | 'dark' | 'auto';
+  size?: 'normal' | 'compact';
 }
 
 const Turnstile = forwardRef<TurnstileHandle, TurnstileProps>(function Turnstile(
-  { siteKey, onVerify, onExpire, onError, className, theme = 'auto' },
+  { siteKey, onVerify, onExpire, onError, className, theme = 'auto', size = 'normal' },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -76,6 +77,7 @@ const Turnstile = forwardRef<TurnstileHandle, TurnstileProps>(function Turnstile
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
           theme,
+          size,
           callback: (token: string) => onVerify(token),
           'expired-callback': () => onExpire?.(),
           'error-callback': () => {
@@ -94,7 +96,7 @@ const Turnstile = forwardRef<TurnstileHandle, TurnstileProps>(function Turnstile
       widgetIdRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteKey]);
+  }, [siteKey, size]);
 
   if (failed) {
     return <p className="text-xs text-red-500">Couldn&rsquo;t load the verification widget — check your connection and reload.</p>;

@@ -62,13 +62,24 @@ export default function CursorGrid({
     if (!canvas || !parent || !ctx) return;
 
     let raf = 0;
+    // offsetWidth/offsetHeight (the parent's own layout box), not
+    // getBoundingClientRect() (its rendered, post-transform box) — a
+    // caller whose parent is still mid `transform: scale(...)` (this
+    // component's one caller, ChatAssistant's panel, animates in via a
+    // genie scale) would otherwise have its very first measurement read a
+    // transiently shrunk size. Since a CSS transform never changes the
+    // parent's actual layout box, ResizeObserver — which watches box size,
+    // not visual/transformed size — never fires again to correct it, so
+    // that wrong first read stuck the canvas at a tiny size in the
+    // top-left corner for good.
     const resize = () => {
-      const rect = parent.getBoundingClientRect();
+      const width = parent.offsetWidth;
+      const height = parent.offsetHeight;
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
     };
     resize();
     const ro = new ResizeObserver(resize);

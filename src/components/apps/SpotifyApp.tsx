@@ -10,10 +10,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useYouTubePlayer, searchYouTube, type YouTubeTrack } from '../../lib/youtube-player';
-import { loadStringArray, saveStringArray } from '../../lib/storage';
+import { loadJSON, saveJSON } from '../../lib/storage';
 import { GlassBackdrop } from '../GlassBackdrop';
 
-const MAX_RECENT_SEARCHES = 5;
+const MAX_RECENT_TRACKS = 8;
+
+function isTrackArray(value: unknown): value is YouTubeTrack[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (v) =>
+        v && typeof v === 'object' &&
+        typeof (v as YouTubeTrack).id === 'string' &&
+        typeof (v as YouTubeTrack).title === 'string' &&
+        typeof (v as YouTubeTrack).thumbnail === 'string'
+    )
+  );
+}
 
 const ACCENT = '#1ED760';
 
@@ -205,7 +218,20 @@ export default function SpotifyApp({ sceneCanvasRef }: { interactive?: boolean; 
   const [results, setResults] = useState<YouTubeTrack[]>([]);
   const [status, setStatus] = useState<'idle' | 'searching' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadStringArray('spotifySearches', []));
+  // What the "home" (idle, no active search) section shows — the actual
+  // tracks a visitor has played, thumbnail and all, not the raw text they
+  // once searched for (which had no artwork of its own to show, and no
+  // stable mapping to any one track anyway — the same query can turn up
+  // different results on different searches).
+  const [recentTracks, setRecentTracks] = useState<YouTubeTrack[]>(() => loadJSON('spotifyRecentTracks', [], isTrackArray));
+
+  const rememberTrack = (track: YouTubeTrack) => {
+    setRecentTracks((prev) => {
+      const next = [track, ...prev.filter((t) => t.id !== track.id)].slice(0, MAX_RECENT_TRACKS);
+      saveJSON('spotifyRecentTracks', next);
+      return next;
+    });
+  };
 
   const runSearch = async (raw: string) => {
     const q = raw.trim();
@@ -213,11 +239,6 @@ export default function SpotifyApp({ sceneCanvasRef }: { interactive?: boolean; 
     setQuery(q);
     setStatus('searching');
     setError(null);
-    setRecentSearches((prev) => {
-      const next = [q, ...prev.filter((s) => s.toLowerCase() !== q.toLowerCase())].slice(0, MAX_RECENT_SEARCHES);
-      saveStringArray('spotifySearches', next);
-      return next;
-    });
     try {
       const tracks = await searchYouTube(q);
       setResults(tracks);
@@ -231,6 +252,11 @@ export default function SpotifyApp({ sceneCanvasRef }: { interactive?: boolean; 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     runSearch(query);
+  };
+
+  const playTrack = (track: YouTubeTrack, queue: YouTubeTrack[], index: number) => {
+    player.playTrack(track, queue, index);
+    rememberTrack(track);
   };
 
   const progress = player.duration > 0 ? (player.currentTime / player.duration) * 100 : 0;
@@ -308,19 +334,27 @@ export default function SpotifyApp({ sceneCanvasRef }: { interactive?: boolean; 
         )}
         {status === 'error' && <div className="flex h-full items-center justify-center px-6 text-center text-sm text-red-300">{error}</div>}
         {status === 'idle' && results.length === 0 && (
-          recentSearches.length > 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-white/50">Recent searches</div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {recentSearches.map((q) => (
+          recentTracks.length > 0 ? (
+            <div className="flex h-full flex-col gap-3 overflow-y-auto px-6 pb-4 pt-2" data-lenis-prevent>
+              <div className="text-xs font-semibold uppercase tracking-wide text-white/50">Recently played</div>
+              <div className="grid grid-cols-3 gap-3">
+                {recentTracks.map((track, index) => (
                   <button
-                    key={q}
+                    key={track.id}
                     type="button"
-                    onClick={() => runSearch(q)}
-                    className="rounded-full px-3 py-1.5 text-xs text-white/85 transition hover:bg-white/20"
-                    style={{ background: 'rgba(255,255,255,0.12)' }}
+                    onClick={() => playTrack(track, recentTracks, index)}
+                    className="group text-left"
                   >
-                    {q}
+                    <div className="relative overflow-hidden rounded-xl shadow-lg" style={{ aspectRatio: '1 / 1' }}>
+                      <img src={track.thumbnail} alt="" className="h-full w-full object-cover transition group-hover:scale-105" draggable={false} />
+                      {track.id === player.current?.id && (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.35)' }}>
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: ACCENT }} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-1.5 truncate text-xs font-medium text-white/90">{track.title}</div>
+                    <div className="truncate text-[11px] text-white/50">{track.channelTitle}</div>
                   </button>
                 ))}
               </div>
@@ -333,7 +367,7 @@ export default function SpotifyApp({ sceneCanvasRef }: { interactive?: boolean; 
           <TrackCarousel
             tracks={results}
             currentId={player.current?.id}
-            onSelect={(track, index) => player.playTrack(track, results, index)}
+            onSelect={(track, index) => playTrack(track, results, index)}
           />
         )}
       </div>

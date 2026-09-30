@@ -10,7 +10,7 @@ const KEYS = {
   widgets: 'portfolio:visibleWidgets',
   widgetOrder: 'portfolio:widgetOrder',
   authUser: 'portfolio:authUser',
-  spotifySearches: 'portfolio:spotifySearches',
+  spotifyRecentTracks: 'portfolio:spotifyRecentTracks',
 } as const;
 
 type StorageKey = keyof typeof KEYS;
@@ -62,6 +62,30 @@ export function loadStringArray(key: StorageKey, fallback: string[]): string[] {
 }
 
 export function saveStringArray(key: StorageKey, value: string[]) {
+  try {
+    localStorage.setItem(KEYS[key], JSON.stringify(value));
+  } catch {
+    // ignore
+  }
+}
+
+// A small typed-JSON pair for state shapes owned by their own caller (e.g.
+// SpotifyApp's recently-played tracks) rather than by this file — the
+// caller supplies its own type guard instead of this file needing to know
+// every shape it might ever store, the way loadAuthUser/saveAuthUser above
+// hard-code AuthUser's.
+export function loadJSON<T>(key: StorageKey, fallback: T, isValid: (value: unknown) => value is T): T {
+  try {
+    const raw = localStorage.getItem(KEYS[key]);
+    if (raw === null) return fallback;
+    const parsed = JSON.parse(raw);
+    return isValid(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveJSON(key: StorageKey, value: unknown) {
   try {
     localStorage.setItem(KEYS[key], JSON.stringify(value));
   } catch {

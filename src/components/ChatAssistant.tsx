@@ -138,6 +138,18 @@ declare global {
     SpeechRecognition?: new () => SpeechRecognitionLike;
     webkitSpeechRecognition?: new () => SpeechRecognitionLike;
   }
+  interface Navigator {
+    // Brave's own self-identification API (https://github.com/brave/brave-browser/wiki/Detecting-Brave)
+    // — the only reliable way to detect Brave specifically, since it
+    // otherwise presents as a normal Chromium UA. Used to short-circuit
+    // dictation there: Brave exposes the SpeechRecognition constructor
+    // (feature detection passes) but deliberately strips the online speech
+    // backend for privacy and never finished an on-device replacement, so
+    // it always fails with a misleading error:'network' — see
+    // github.com/brave/brave-browser/issues/2802 and /55414, confirmed
+    // "not scheduled" by Brave itself.
+    brave?: { isBrave: () => Promise<boolean> };
+  }
 }
 
 export default function ChatAssistant({ open, onClose, originRect }: { open: boolean; onClose: () => void; originRect?: DockRect | null }) {
@@ -281,6 +293,23 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   const hasStarted = messages.length > 0;
   const isFirstMessage = messages.length === 0;
   const speechSupported = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  // Checked once, up front, rather than waiting for the inevitable
+  // error:'network' Brave throws on every real attempt (see the
+  // Navigator.brave declaration above) — isBrave() is itself async
+  // (resolves after a tick even though the answer is really static per
+  // browser), so this starts false and flips true a moment after mount in
+  // Brave specifically. A visitor would need to tap the mic within that
+  // first instant to still hit the old error path, in practice never.
+  const [isBrave, setIsBrave] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    navigator.brave?.isBrave().then((result) => {
+      if (!cancelled) setIsBrave(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // The bot's expression is derived from what's actually happening rather
   // than set ad hoc all over the component: a validation/security flash always
@@ -411,6 +440,15 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   const startDictation = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
+    // Brave exposes SR (feature detection above passes) but always fails
+    // with a misleading error:'network' — see the Navigator.brave
+    // declaration's own comment. Telling the visitor plainly up front
+    // beats letting them sit through a doomed recording attempt first.
+    if (isBrave) {
+      setError("Voice input isn't supported in Brave — try Chrome or Edge, or just type your message.");
+      flashAngry();
+      return;
+    }
     dictationCancelledRef.current = false;
     dictationStoppingRef.current = false;
     const recognition = new SR();

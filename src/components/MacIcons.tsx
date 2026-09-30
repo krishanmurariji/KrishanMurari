@@ -89,34 +89,31 @@ export const SpotifyIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-// The dock's Om icon — a flat, hand-drawn take on the same character as
-// RobotAvatar3D (src/components/ui/RobotAvatar3D.tsx), not a live render of
-// it: the dock's hover-magnify engine (dockbar) resizes tiles by setting
-// real width/height *and* a CSS transform: scale() on the same element in
-// the same frame, and a live react-three-fiber <Canvas> caught in that
-// combination corrupted its own WebGL render when this app hit the same
-// thing elsewhere (see ChatAssistant.tsx's own comment on this). A flat SVG
-// has no such risk, so this tile stays flat while the widget/chat-panel
-// instances of Om stay the real animated 3D character.
-export const OmIcon = (props: SVGProps<SVGSVGElement>) => (
+// The dock's icon for the Om chat panel — styled after the real macOS
+// Messages app (a green rounded-square tile with a white speech-bubble
+// glyph) rather than a portrait of Om himself, so it reads at a glance as
+// "open messaging" the way a real dock does. Same "flat image, own
+// background baked in" convention as the icons above — and flat for the
+// same reason as before: the dock's hover-magnify engine (dockbar) resizes
+// tiles by setting real width/height *and* a CSS transform: scale() on the
+// same element in the same frame, and a live react-three-fiber <Canvas>
+// caught in that combination corrupted its own WebGL render when this app
+// hit the same thing elsewhere (see ChatAssistant.tsx's own comment on
+// this) — so this tile stays flat while the widget/chat-panel instances of
+// Om stay the real animated 3D character.
+export const MessagesIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <rect width="100" height="100" rx="22" fill="#2a3140" />
-    <line x1="38" y1="22" x2="30" y2="10" stroke="#c7ccd3" strokeWidth="3" strokeLinecap="round" />
-    <line x1="62" y1="22" x2="70" y2="10" stroke="#c7ccd3" strokeWidth="3" strokeLinecap="round" />
-    <circle cx="30" cy="10" r="5.5" fill="#f28c28" />
-    <circle cx="70" cy="10" r="5.5" fill="#f28c28" />
-    <circle cx="17" cy="49" r="10" fill="#f28c28" />
-    <circle cx="83" cy="49" r="10" fill="#f28c28" />
-    <circle cx="50" cy="49" r="31" fill="#f4f7fa" />
-    <circle cx="39" cy="49" r="11.5" fill="#26323f" />
-    <circle cx="61" cy="49" r="11.5" fill="#26323f" />
-    <circle cx="39" cy="49" r="8" fill="#4bb8d1" />
-    <circle cx="61" cy="49" r="8" fill="#4bb8d1" />
-    <circle cx="40.5" cy="50.5" r="4" fill="#12181f" />
-    <circle cx="62.5" cy="50.5" r="4" fill="#12181f" />
-    <circle cx="42.5" cy="46" r="1.6" fill="#ffffff" />
-    <circle cx="64.5" cy="46" r="1.6" fill="#ffffff" />
-    <path d="M43 68 Q50 74 57 68" fill="none" stroke="#2a3140" strokeWidth="3.2" strokeLinecap="round" />
+    <defs>
+      <linearGradient id="messagesBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#6CE66C" />
+        <stop offset="100%" stopColor="#2FBF3E" />
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="22" fill="url(#messagesBg)" />
+    <path
+      d="M50 20 C30.7 20 15 32.7 15 48.4 C15 58 21 66.4 30.4 71.3 C29.8 75.1 28 79.3 25.4 82.6 C25 83.1 25.4 83.9 26.1 83.8 C32.6 82.8 38.6 79.8 43 76.4 C45.3 76.8 47.6 77 50 77 C69.3 77 85 64.3 85 48.4 C85 32.7 69.3 20 50 20 Z"
+      fill="#FFFFFF"
+    />
   </svg>
 );
 

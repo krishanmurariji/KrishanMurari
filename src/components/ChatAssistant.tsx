@@ -105,6 +105,10 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   const contentRef = useRef<HTMLDivElement>(null);
   const angryTimeoutRef = useRef<number | null>(null);
   const [botRect, setBotRect] = useState({ top: 0, left: 0, size: 192 });
+  // Om's own drop-bounce-settle-and-open-eyes intro plays first; the
+  // composer only fades in once that's actually finished (RobotAvatar3D's
+  // onIntroComplete), rather than the whole panel appearing at once.
+  const [composerReady, setComposerReady] = useState(false);
 
   const hasStarted = messages.length > 0;
   const isFirstMessage = messages.length === 0;
@@ -236,6 +240,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
       setBotVisible(true);
       setSmokeBurst(null);
       if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
+      setComposerReady(false);
     }
   }, [open]);
 
@@ -419,7 +424,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                   transition={{ duration: 0.18 }}
                   className="h-full w-full"
                 >
-                  <RobotAvatar3D className="h-full w-full" expression={expression} />
+                  <RobotAvatar3D className="h-full w-full" expression={expression} onIntroComplete={() => setComposerReady(true)} />
                 </motion.div>
               </motion.div>
 
@@ -463,8 +468,21 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
 
             {/* Composer — a single boxed, centered pill near the bottom
                 rather than a full-width bar, with the mic and send controls
-                sitting inside it on the right. */}
-            <div className="flex shrink-0 flex-col items-center gap-2 px-6 pb-8 pt-2">
+                sitting inside it on the right. Fades in only once Om's own
+                intro has actually finished (composerReady, driven by
+                RobotAvatar3D's onIntroComplete above) — the bot arrives
+                first, then the visitor gets somewhere to type, rather than
+                everything appearing at once. Stays in the tree throughout
+                (not conditionally mounted) so its own fade is simple
+                opacity/y rather than an enter/exit remount; pointer-events
+                is off until ready so it can't be clicked or tabbed into
+                while still invisible. */}
+            <motion.div
+              initial={false}
+              animate={{ opacity: composerReady ? 1 : 0, y: composerReady ? 0 : 10 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              style={{ pointerEvents: composerReady ? 'auto' : 'none' }}
+              className="flex shrink-0 flex-col items-center gap-2 px-6 pb-8 pt-2">
               {error && <div className="rounded-lg bg-red-500/15 px-3 py-1.5 text-[12px] text-red-300">{error}</div>}
 
               {isFirstMessage && TURNSTILE_SITE_KEY && (
@@ -523,7 +541,7 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                   <SendIcon className="h-[18px] w-[18px]" />
                 </button>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         </motion.div>
       )}

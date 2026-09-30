@@ -12,7 +12,7 @@ import MenuBar from './components/MenuBar';
 import DesktopWidgets from './components/DesktopWidgets';
 import ChatAssistant from './components/ChatAssistant';
 // import { SmoothCursor } from './components/ui/smooth-cursor'; // disabled per request — keeping the component around in case it's wanted back later
-import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon, OmIcon } from './components/MacIcons';
+import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon, MessagesIcon } from './components/MacIcons';
 import SignOutConfirm from './components/SignOutConfirm';
 import { loadBool, saveBool, loadStringArray, saveStringArray, loadNumber, saveNumber, saveAuthUser, clearAuthUser, loadAuthUser, type AuthUser, PROVIDER_LABELS } from './lib/storage';
 import { WIDGET_IDS, type WidgetId } from './components/DesktopWidgets';
@@ -163,9 +163,10 @@ export default function App() {
     // Doesn't open a real AppWindow — handleDockSelect below opens the Om
     // chat panel instead. Still a normal DockApp (so it gets the same
     // hover-magnify tile and a harmless snapshot-capture fallback) with a
-    // plain flat icon rather than a live 3D one — see OmIcon's own comment
-    // for why.
-    { id: 'chat', label: 'Chat with Om', icon: OmIcon, kind: 'placeholder' },
+    // plain flat icon rather than a live 3D one — see MessagesIcon's own
+    // comment for why. The dock is the only way to open the chat now — the
+    // Photo widget's bot is purely decorative (see PhotoCard).
+    { id: 'chat', label: 'Messages', icon: MessagesIcon, kind: 'placeholder' },
   ], []);
 
   // Captured once, upfront, for every app — see useSharedSnapshots' own
@@ -355,7 +356,6 @@ export default function App() {
           music={{ playing, onTogglePlay: togglePlay, onSkip: restartTrack, trackTitle: TRACK_TITLE, trackArtist: TRACK_ARTIST }}
           sceneCanvasRef={sceneCanvasRef}
           isLight={isLight}
-          onOpenChat={() => setChatOpen(true)}
         />
         <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} />
 

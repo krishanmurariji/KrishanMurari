@@ -52,8 +52,15 @@ const BODY_TEXTURE_URL = '/robot/texture.jpg';
 const TARGET_RADIUS = 0.62;
 
 // The original's exact animation constants (Robot.prototype.animation),
-// kept as-is rather than re-tuned.
-const FLYING_HEIGHT = 2;
+// kept as-is rather than re-tuned — except FLYING_HEIGHT, which doesn't
+// have a meaningful analog here: it was how far above the original scene's
+// own ground plane (at y=-7 in that scene's units) the character rested,
+// not a small idle-bob amplitude. This component has no ground and its
+// camera is centered on world origin, so the correct rest height is just
+// 0 (see the turnOn tween below) — scaling the original's absolute height
+// by TARGET_RADIUS's normalizing factor doesn't translate; it landed the
+// ball comfortably above center, clipped against the top of tight
+// containers (the "head cuts off" bug).
 const FLYING_FREQ = 0.015;
 const EYE_AMPLITUDE = 2;
 const EYELID_AMPLITUDE = 1;
@@ -132,7 +139,32 @@ function useRobotModel(): ModelNodes {
     const root = collada.scene.clone(true);
     root.rotation.y = THREE.MathUtils.degToRad(-90); // "Rotate robot in front direction" — the original's own comment.
 
-    const box = new THREE.Box3().setFromObject(root);
+    const eye = root.getObjectByName('Eye')!;
+    const eyelidTop = root.getObjectByName('Eyelid-top')!;
+    const eyelidBottom = root.getObjectByName('Eyelid-bottom')!;
+    eyelidTop.rotation.x = THREE.MathUtils.degToRad(EYELID_TOP_CLOSED_DEG);
+    eyelidBottom.rotation.x = THREE.MathUtils.degToRad(EYELID_BOTTOM_CLOSED_DEG);
+
+    // Centered and scaled off the "Body" shell specifically, not the whole
+    // assembly's bounding box — the eyelids/eye are mid-animation targets
+    // whose position varies by pose, so bounding the whole root would make
+    // the recenter (and therefore how high the ball sits on screen) depend
+    // on whatever pose happened to be set at the moment this ran. The Body
+    // is the one part that's always the same sphere, so it's the stable
+    // thing to center on. (Also has to run after the eyelid rotations
+    // above are set, not before — Box3.setFromObject reads current world
+    // matrices, and computing this from the model's raw, un-set default
+    // pose was the actual cause of the "ball rests too high, head crops"
+    // bug: the recenter offset didn't match what was actually on screen.)
+    const bodyNode = root.getObjectByName('Body')!;
+    // Box3.setFromObject doesn't reliably pick up the rotation/eyelid
+    // changes just made above on this freshly-cloned tree without an
+    // explicit matrix update first — without this, it was measuring off
+    // stale (pre-mutation, and critically pre-ColladaLoader's own implicit
+    // unit-scale) matrices, throwing naturalRadius off by ~40x and making
+    // the whole character render as a barely-visible speck.
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(bodyNode);
     const center = box.getCenter(new THREE.Vector3());
     root.position.sub(center);
 
@@ -140,17 +172,11 @@ function useRobotModel(): ModelNodes {
     const naturalRadius = Math.max(size.x, size.y, size.z) / 2;
     const scale = naturalRadius > 0 ? TARGET_RADIUS / naturalRadius : 1;
 
-    const eye = root.getObjectByName('Eye')!;
-    const eyelidTop = root.getObjectByName('Eyelid-top')!;
-    const eyelidBottom = root.getObjectByName('Eyelid-bottom')!;
-    eyelidTop.rotation.x = THREE.MathUtils.degToRad(EYELID_TOP_CLOSED_DEG);
-    eyelidBottom.rotation.x = THREE.MathUtils.degToRad(EYELID_BOTTOM_CLOSED_DEG);
-
     return { root, eye, eyelidTop, eyelidBottom, scale };
   }, [collada]);
 }
 
-function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean; expression: BotExpression; trackMouse?: boolean }) {
+function Bot({ reducedMotion, expression, trackMouse, onIntroComplete }: { reducedMotion: boolean; expression: BotExpression; trackMouse?: boolean; onIntroComplete?: () => void }) {
   const { root, eye, eyelidTop, eyelidBottom, scale } = useRobotModel();
 
   const pivot = useRef<THREE.Group>(null); // "this.mesh" in the original — the outer pivot the intro drop/bounce/spin animates.
@@ -174,6 +200,7 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
       eyelidTop.rotation.x = THREE.MathUtils.degToRad(EYELID_TOP_OPEN_DEG);
       eyelidBottom.rotation.x = THREE.MathUtils.degToRad(EYELID_BOTTOM_OPEN_DEG);
       introComplete.current = true;
+      onIntroComplete?.();
       return;
     }
 
@@ -199,7 +226,7 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
       });
     });
     const turnOn = gsap.delayedCall(3, () => {
-      gsap.to(pivotNode.position, { duration: 1.5, y: FLYING_HEIGHT * scale, ease: 'power2.out' });
+      gsap.to(pivotNode.position, { duration: 1.5, y: 0, ease: 'power2.out' });
       gsap.to(pivotNode.rotation, { duration: 1, x: 0, y: 0, z: 0, ease: 'power2.out' });
       gsap.to(eyelidTop.rotation, { duration: 0.5, delay: 1.5, x: THREE.MathUtils.degToRad(EYELID_TOP_OPEN_DEG), ease: 'power2.out' });
       gsap.to(eyelidBottom.rotation, {
@@ -207,7 +234,7 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
         delay: 1.5,
         x: THREE.MathUtils.degToRad(EYELID_BOTTOM_OPEN_DEG),
         ease: 'power2.out',
-        onStart: () => { introComplete.current = true; },
+        onStart: () => { introComplete.current = true; onIntroComplete?.(); },
       });
     });
 
@@ -294,7 +321,7 @@ function Bot({ reducedMotion, expression, trackMouse }: { reducedMotion: boolean
   );
 }
 
-export default function RobotAvatar3D({ className, expression = 'normal', trackMouse = false }: { className?: string; expression?: BotExpression; trackMouse?: boolean }) {
+export default function RobotAvatar3D({ className, expression = 'normal', trackMouse = false, onIntroComplete }: { className?: string; expression?: BotExpression; trackMouse?: boolean; onIntroComplete?: () => void }) {
   const reducedMotion = usePrefersReducedMotion();
   return (
     <div className={className}>
@@ -303,7 +330,7 @@ export default function RobotAvatar3D({ className, expression = 'normal', trackM
         <directionalLight position={[1.5, 2, 3]} intensity={1.4} />
         <directionalLight position={[-2, -1, 1.5]} intensity={0.4} />
         <Suspense fallback={null}>
-          <Bot reducedMotion={reducedMotion} expression={expression} trackMouse={trackMouse} />
+          <Bot reducedMotion={reducedMotion} expression={expression} trackMouse={trackMouse} onIntroComplete={onIntroComplete} />
         </Suspense>
       </Canvas>
     </div>

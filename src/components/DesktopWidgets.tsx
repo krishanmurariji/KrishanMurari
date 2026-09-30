@@ -785,10 +785,7 @@ function SocialIconButton({
   );
 }
 
-// onOpenChat is optional so the widget-gallery preview instance (see
-// WIDGET_PREVIEWS['photo'] above) can render this same card without a real
-// chat to open — its bot button just no-ops there.
-function PhotoCard({ isLight = true, onOpenChat }: { isLight?: boolean; onOpenChat?: () => void }) {
+function PhotoCard({ isLight = true }: { isLight?: boolean }) {
   // Photos that have actually failed to load at runtime (vs. the
   // known-bad ones above, which were never added) get dropped from the
   // rotation instead of leaving a broken-image icon on screen.
@@ -900,17 +897,16 @@ function PhotoCard({ isLight = true, onOpenChat }: { isLight?: boolean; onOpenCh
               <SocialIconButton key={label} label={label} href={href} Icon={Icon} brand={brand} isLight={isLight} />
             ))}
           </div>
-          {/* Just the bot, no button chrome — its own idle animation and
-              mouse-tracking gaze (trackMouse) are the affordance here rather
-              than a labeled pill. */}
-          <button
-            type="button"
-            onClick={() => onOpenChat?.()}
-            aria-label="Chat with Om"
-            className="shrink-0 rounded-full transition-transform hover:scale-110"
-          >
-            <RobotAvatar3D className="h-9 w-9" trackMouse />
-          </button>
+          {/* Purely decorative — Om just floats and tracks the cursor here
+              (trackMouse) rather than being clickable; the dock's Messages
+              icon is the only way to open the chat now (see App.tsx's
+              dockApps). Sized and vertically centered to match
+              SocialIconButton (h-7 w-7) exactly, so the row reads as one
+              aligned set of icons rather than an oversized bot next to
+              smaller social links. */}
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+            <RobotAvatar3D className="h-7 w-7" trackMouse />
+          </div>
         </div>
       </div>
     </div>
@@ -992,7 +988,6 @@ export default function DesktopWidgets({
   music,
   sceneCanvasRef,
   isLight,
-  onOpenChat,
 }: {
   isLoading?: boolean;
   editMode: boolean;
@@ -1001,10 +996,6 @@ export default function DesktopWidgets({
   music: MusicPlaybackProps;
   sceneCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
   isLight?: boolean;
-  /** Opens the shared Om chat panel — rendered once at the App level so the
-   * dock's own Om icon and this widget's bot button drive the same
-   * conversation instead of each getting their own. */
-  onOpenChat?: () => void;
 }) {
   const has = (id: WidgetId) => visibleWidgets.includes(id);
   const stackRef = useRef<HTMLDivElement>(null);
@@ -1054,7 +1045,7 @@ export default function DesktopWidgets({
 
   const photoGroup = has('photo') && (
     <EditableWidget editMode={editMode} onRemove={() => onRemoveWidget('photo')}>
-      <PhotoCard isLight={isLight} onOpenChat={onOpenChat} />
+      <PhotoCard isLight={isLight} />
     </EditableWidget>
   );
 

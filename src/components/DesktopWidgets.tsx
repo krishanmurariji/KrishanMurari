@@ -900,12 +900,23 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
           {/* Purely decorative — the bot just floats and tracks the cursor
               here (trackMouse) rather than being clickable; the dock's Messages
               icon is the only way to open the chat now (see App.tsx's
-              dockApps). Sized and vertically centered to match
-              SocialIconButton (h-7 w-7) exactly, so the row reads as one
-              aligned set of icons rather than an oversized bot next to
-              smaller social links. */}
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-            <RobotAvatar3D className="h-7 w-7" trackMouse />
+              dockApps). Matching SocialIconButton's outer box size alone
+              (h-7 w-7) wasn't actually enough to read as "the same size" —
+              SocialIconButton is a filled circular badge with a background
+              and border, and its glyph only fills a fraction of that badge;
+              a bare transparent h-7 w-7 canvas next to it read as smaller
+              and weightless by comparison. Wrapping the bot in the same
+              badge treatment (rounded-full, matching background/border)
+              gives it the same visual footprint as every other icon in
+              this row rather than just the same bounding box. */}
+          <div
+            className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border"
+            style={{
+              background: isLight ? '#ffffff' : 'rgba(255,255,255,0.08)',
+              borderColor: isLight ? '#e5e5ea' : 'rgba(255,255,255,0.15)',
+            }}
+          >
+            <RobotAvatar3D className="h-full w-full" trackMouse />
           </div>
         </div>
       </div>

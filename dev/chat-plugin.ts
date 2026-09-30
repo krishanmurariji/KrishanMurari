@@ -103,7 +103,7 @@ export function chatDevPlugin(): Plugin {
           sendJson(200, { reply });
         } catch (err) {
           console.error('[chat] Gemini request failed:', err);
-          sendJson(502, { error: "The assistant couldn't respond just now — please try again, or email Krishan directly." });
+          sendJson(502, { error: "Sorry, I couldn't get a response together just now — please try again, or email Krishan directly." });
         }
       });
     },

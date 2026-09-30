@@ -281,11 +281,11 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Something went wrong — try again.');
+      if (!res.ok) throw new Error(data.error || "Sorry, something went wrong on my end — try again.");
       setMessages((prev) => [...prev, { role: 'model', text: data.reply as string }]);
       playReplySound();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong — try again.');
+      setError(err instanceof Error ? err.message : "Sorry, something went wrong on my end — try again.");
       flashAngry();
       // The failed turn stays in the transcript (it really was sent), but a
       // spent single-use Turnstile token can't be reused for the retry — a
@@ -414,11 +414,12 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
                   className="w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition"
                   style={{ background: '#ff5f57', cursor: 'pointer' }}
                 />
+                {/* Hidden below sm (640px) per request — red/green stay. */}
                 <button
                   type="button"
                   aria-label="Minimize"
                   disabled
-                  className="w-3.5 h-3.5 rounded-full border-none"
+                  className="hidden w-3.5 h-3.5 rounded-full border-none sm:block"
                   style={{ background: '#febc2e', cursor: 'default', opacity: 0.5 }}
                 />
                 <button

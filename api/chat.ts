@@ -302,6 +302,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json({ reply });
   } catch (err) {
     console.error('[api/chat] Gemini request failed:', err);
-    res.status(502).json({ error: "The assistant couldn't respond just now — please try again, or email Krishan directly." });
+    res.status(502).json({ error: "Sorry, I couldn't get a response together just now — please try again, or email Krishan directly." });
   }
 }

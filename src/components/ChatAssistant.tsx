@@ -120,6 +120,9 @@ interface ChatMessage {
 interface SpeechRecognitionResultLike {
   results: { [index: number]: { [index: number]: { transcript: string } } };
 }
+interface SpeechRecognitionErrorLike {
+  error: string;
+}
 interface SpeechRecognitionLike extends EventTarget {
   lang: string;
   interimResults: boolean;
@@ -128,7 +131,7 @@ interface SpeechRecognitionLike extends EventTarget {
   stop: () => void;
   onresult: ((e: SpeechRecognitionResultLike) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: SpeechRecognitionErrorLike) => void) | null;
 }
 declare global {
   interface Window {
@@ -175,6 +178,13 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // that just set `phase`, an infinite loop.
   const phaseRef = useRef<Phase>('closed');
   const panelRef = useRef<HTMLDivElement>(null);
+  // The title bar's green button — panelRect() (what the genie folds
+  // toward/from) always reflects the *normal* centered size regardless of
+  // this, so fullscreen is forced back off the moment a close starts (see
+  // the phase effect below): folding from a full-viewport rect toward the
+  // dock icon would read as a completely different, much larger genie than
+  // the one it opened with.
+  const [fullscreen, setFullscreen] = useState(false);
   const genieRafRef = useRef(0);
   const genieSettleRef = useRef<number | undefined>(undefined);
   const genieTokenRef = useRef(0);
@@ -249,6 +259,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
     } else if (phaseRef.current !== 'closed') {
       phaseRef.current = 'closing';
       setPhase('closing');
+      setFullscreen(false);
       runPanelGenie('minimize', () => {
         phaseRef.current = 'closed';
         setPhase('closed');
@@ -405,7 +416,27 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
       if (transcript) setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
     };
     recognition.onend = () => { recognitionRef.current = null; };
-    recognition.onerror = () => { recognitionRef.current = null; };
+    // Previously silent — a permission block, a network hiccup reaching the
+    // browser's speech backend, or no microphone at all all ended the same
+    // way: VoicePill's own "recording" UI played out normally (it has no
+    // idea recognition ever failed), then stopped with nothing typed, no
+    // explanation. Surfacing it through the same error banner/angry-flash
+    // other failures already use is what actually distinguishes "I didn't
+    // hear anything" from "voice input is broken right now".
+    recognition.onerror = (e) => {
+      recognitionRef.current = null;
+      if (dictationCancelledRef.current) return;
+      const message =
+        e.error === 'not-allowed' || e.error === 'service-not-allowed'
+          ? 'Microphone access is blocked — check your browser/site permissions and try again.'
+          : e.error === 'audio-capture'
+            ? "Couldn't find a microphone to record from."
+            : e.error === 'no-speech'
+              ? "Didn't catch that — try again."
+              : 'Voice input failed — please type your message instead.';
+      setError(message);
+      flashAngry();
+    };
     recognitionRef.current = recognition;
     recognition.start();
   };
@@ -420,7 +451,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
 
   return createPortal(
     phase !== 'closed' && (
-      <div className="fixed inset-0 z-[100004] flex items-center justify-center p-4">
+      <div className={`fixed inset-0 z-[100004] flex items-center justify-center ${fullscreen ? '' : 'p-4'}`}>
         {/* Only the backdrop fades on its own quick timer — the panel's
             own visibility is entirely the clip-path genie below (see
             genieClipPath), not opacity. An earlier version put this
@@ -450,12 +481,23 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
             rather than a scale transform or a warped snapshot. */}
         <div
           ref={panelRef}
-          className="relative flex h-[88vh] max-h-[580px] w-[94vw] max-w-[760px] flex-col overflow-hidden rounded-[12px] border border-white/15"
+          className={
+            fullscreen
+              ? 'relative flex h-full w-full flex-col overflow-hidden'
+              : 'relative flex h-[88vh] max-h-[580px] w-[94vw] max-w-[760px] flex-col overflow-hidden rounded-[12px] border border-white/15'
+          }
           style={{
             background: 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
             backdropFilter: 'blur(36px) saturate(180%)',
             WebkitBackdropFilter: 'blur(36px) saturate(180%)',
             boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
+            // Matches AppWindow's own windowed-toggle transition list —
+            // only properties the fullscreen toggle actually changes.
+            // During the genie's own opening/closing these are already at
+            // their final constant values (the fold is the clip-path
+            // alone, see genieClipPath's own comment), so this never
+            // fights that animation.
+            transition: 'width 0.25s ease, height 0.25s ease, border-radius 0.25s ease',
           }}
         >
             {/* A faint magenta grid that only lights up right around the
@@ -483,11 +525,12 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                 height, gradient, blur, specular sheen, traffic-light
                 buttons) instead of a single floating "✕" — this is the
                 piece that actually reads as "the same window design as
-                every other app" rather than a bespoke modal. Minimize and
-                the green "windowed" button are disabled — this panel
-                doesn't have either concept — but stay visible so the
+                every other app" rather than a bespoke modal. The green
+                button toggles fullscreen (see the `fullscreen` state
+                above); minimize stays disabled — this panel has no
+                dock/tray to minimize into — but stays visible so the
                 three-dot cluster itself still reads as a normal macOS
-                title bar rather than a lone close button. */}
+                title bar rather than two working buttons and a gap. */}
             <div
               className="flex items-center px-4 shrink-0 relative overflow-hidden"
               style={{
@@ -527,10 +570,10 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                 />
                 <button
                   type="button"
-                  aria-label="Fill screen"
-                  disabled
-                  className="w-3.5 h-3.5 rounded-full border-none"
-                  style={{ background: '#28c840', cursor: 'default' }}
+                  aria-label={fullscreen ? 'Exit full screen' : 'Fill screen'}
+                  onClick={() => setFullscreen((f) => !f)}
+                  className="w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition"
+                  style={{ background: '#28c840', cursor: 'pointer' }}
                 />
               </div>
               <span
@@ -632,7 +675,6 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                   ref={turnstileRef}
                   siteKey={TURNSTILE_SITE_KEY}
                   theme="dark"
-                  size="compact"
                   onVerify={setTurnstileToken}
                   onExpire={() => setTurnstileToken(null)}
                   onError={() => setTurnstileToken(null)}
@@ -666,7 +708,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                     accentColor="#f5f5f5"
                     iconColor="#a1a1aa"
                     background="#27272a"
-                    size={28}
+                    size={40}
                     shape="pill"
                     reach={8}
                     showTime

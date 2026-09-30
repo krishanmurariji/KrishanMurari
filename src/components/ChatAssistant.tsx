@@ -19,7 +19,7 @@
 // multi-turn chat unusable. Per-IP and site-wide daily rate limits (the
 // Gemini free tier's request quota is shared across every visitor, not
 // per-visitor) are the ongoing defense after that.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
@@ -37,18 +37,20 @@ import { playAngrySound, playThinkingSound, playReplySound } from '../lib/chatSo
 const ANGRY_HOLD_MS = 1800;
 
 // The panel's own footprint, kept identical to its actual Tailwind classes
-// below (w-[94vw] max-w-[1180px], h-[90vh] max-h-[880px], centered) — used
-// only to compute where the genie's transform-origin should sit relative to
-// the panel, not to size anything. Measuring the panel's own rendered
-// bounding box instead would be wrong here: it's mid-transform (scaling up
-// from the genie's start point) for most of the time that measurement would
-// need to happen, so its rendered box doesn't reflect the final layout size
-// the origin math actually needs.
+// below (w-[94vw] max-w-[760px], h-[88vh] max-h-[580px], centered) — the
+// same WIN_W/WIN_H ceiling and viewport ratios every other app window uses
+// (see AppWindow.tsx), so this reads as "one of the app windows" instead of
+// its own oversized modal. Used only to compute where the genie's
+// transform-origin should sit relative to the panel, not to size anything.
+// Measuring the panel's own rendered bounding box instead would be wrong
+// here: it's mid-transform (scaling up from the genie's start point) for
+// most of the time that measurement would need to happen, so its rendered
+// box doesn't reflect the final layout size the origin math actually needs.
 function panelRect() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const width = Math.min(vw * 0.94, 1180);
-  const height = Math.min(vh * 0.9, 880);
+  const width = Math.min(vw * 0.94, 760);
+  const height = Math.min(vh * 0.88, 580);
   return { left: (vw - width) / 2, top: (vh - height) / 2, width, height };
 }
 
@@ -185,62 +187,79 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
     if (open) isFirstBotRectRef.current = true;
   }, [open]);
 
+  // Pulled out of the effect below (and into useCallback, so both that
+  // effect and the panel's onAnimationComplete can share the exact same
+  // function) rather than measuring on every mount unconditionally — see
+  // that effect's own comment for why the *first* call has to be deferred
+  // past the entrance transition.
+  const applyBotRect = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+
+    const dockedSize = width < 640 ? 56 : width < 768 ? 64 : 72;
+    const dockedLeft = width < 640 ? 20 : 28;
+    const dockedRect = { top: 20, left: dockedLeft, size: dockedSize };
+
+    const heroSize = width < 640 ? 144 : 192;
+    const heroRect = { top: height * 0.38 - heroSize / 2, left: width / 2 - heroSize / 2, size: heroSize };
+
+    const target = hasStarted ? dockedRect : heroRect;
+    setBotRect(target);
+
+    const justDocked = !wasStartedRef.current && hasStarted;
+    wasStartedRef.current = hasStarted;
+
+    if (isFirstBotRectRef.current) {
+      // First paint (or reopening an already-started conversation) — snap
+      // straight there, no animation, no dash.
+      isFirstBotRectRef.current = false;
+      botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
+      return;
+    }
+
+    if (justDocked) {
+      const DASH_HIDE_MS = 220;
+      setBotVisible(false);
+      setSmokeBurst({ key: Date.now(), top: heroRect.top, left: heroRect.left, size: heroRect.size });
+
+      if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
+      dashTimeoutRef.current = window.setTimeout(() => {
+        // Resize while invisible — no glitch to see, since nothing is
+        // being rendered on screen during the swap.
+        botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
+        setSmokeBurst({ key: Date.now(), top: target.top, left: target.left, size: target.size });
+        setBotVisible(true);
+      }, DASH_HIDE_MS);
+    } else {
+      // Plain reflow (e.g. a window resize) — smooth, no dash.
+      botControls.start({
+        top: target.top,
+        left: target.left,
+        width: target.size,
+        height: target.size,
+        transition: { type: 'spring', stiffness: 300, damping: 30 },
+      });
+    }
+  }, [hasStarted, botControls]);
+
   useEffect(() => {
     if (!open) return;
-    const applyRect = () => {
-      const el = contentRef.current;
-      if (!el) return;
-      const { width, height } = el.getBoundingClientRect();
-
-      const dockedSize = width < 640 ? 56 : width < 768 ? 64 : 72;
-      const dockedLeft = width < 640 ? 20 : 28;
-      const dockedRect = { top: 20, left: dockedLeft, size: dockedSize };
-
-      const heroSize = width < 640 ? 144 : 192;
-      const heroRect = { top: height * 0.38 - heroSize / 2, left: width / 2 - heroSize / 2, size: heroSize };
-
-      const target = hasStarted ? dockedRect : heroRect;
-      setBotRect(target);
-
-      const justDocked = !wasStartedRef.current && hasStarted;
-      wasStartedRef.current = hasStarted;
-
-      if (isFirstBotRectRef.current) {
-        // First paint (or reopening an already-started conversation) — snap
-        // straight there, no animation, no dash.
-        isFirstBotRectRef.current = false;
-        botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
-        return;
-      }
-
-      if (justDocked) {
-        const DASH_HIDE_MS = 220;
-        setBotVisible(false);
-        setSmokeBurst({ key: Date.now(), top: heroRect.top, left: heroRect.left, size: heroRect.size });
-
-        if (dashTimeoutRef.current) window.clearTimeout(dashTimeoutRef.current);
-        dashTimeoutRef.current = window.setTimeout(() => {
-          // Resize while invisible — no glitch to see, since nothing is
-          // being rendered on screen during the swap.
-          botControls.set({ top: target.top, left: target.left, width: target.size, height: target.size });
-          setSmokeBurst({ key: Date.now(), top: target.top, left: target.left, size: target.size });
-          setBotVisible(true);
-        }, DASH_HIDE_MS);
-      } else {
-        // Plain reflow (e.g. a window resize) — smooth, no dash.
-        botControls.start({
-          top: target.top,
-          left: target.left,
-          width: target.size,
-          height: target.size,
-          transition: { type: 'spring', stiffness: 300, damping: 30 },
-        });
-      }
-    };
-    applyRect();
-    window.addEventListener('resize', applyRect);
-    return () => window.removeEventListener('resize', applyRect);
-  }, [open, hasStarted, botControls]);
+    // Skip the very first measurement here — at this point the panel is
+    // still mid entrance transform (scale ramping up from
+    // GENIE_START_SCALE, or 0.96 on a plain open, toward 1 over the next
+    // several hundred ms), so contentRef.getBoundingClientRect() would read
+    // a transiently shrunk box — on a big screen this parked the bot near
+    // the viewport's top-left corner for the rest of the session, since
+    // isFirstBotRectRef made it a one-time snap that nothing after this
+    // ever re-triggered. The panel's own onAnimationComplete below does
+    // that first, accurate measurement once the entrance has actually
+    // finished; this effect only needs to handle later changes (a message
+    // sent, a window resize).
+    if (!isFirstBotRectRef.current) applyBotRect();
+    window.addEventListener('resize', applyBotRect);
+    return () => window.removeEventListener('resize', applyBotRect);
+  }, [open, hasStarted, applyBotRect]);
 
   // A smoke burst clears itself once its own particle animation has
   // finished playing.
@@ -403,18 +422,23 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
         >
           <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-          {/* The glass panel itself — sized close to "modal-xl": most of a
-              big screen, comfortably contained on a small one. Border
-              radius (12px) and shadow now match the real app windows'
-              (see WindowChrome/AppWindow.tsx — `borderRadius: 12`,
-              `boxShadow: '0 6px 14px rgba(0,0,0,0.28)'`) rather than the
-              much bigger radius/heavier shadow this used to have, which
-              read as its own unrelated modal style instead of the same
-              "window" family as Profile/Experience/etc. */}
+          {/* The glass panel itself — sized to the same WIN_W×WIN_H
+              footprint (760×580, clamped to the viewport) every other app
+              window uses (see AppWindow.tsx's getOpenSize()), rather than
+              its own larger one-off size. Border radius (12px) and shadow
+              also match the real app windows' (see WindowChrome/
+              AppWindow.tsx — `borderRadius: 12`, `boxShadow: '0 6px 14px
+              rgba(0,0,0,0.28)'`), so this reads as the same "window" family
+              as Profile/Experience/etc. rather than a bespoke modal. */}
           <motion.div
             initial={{ scale: originRect ? GENIE_START_SCALE : 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: originRect ? GENIE_START_SCALE : 0.97, opacity: 0 }}
+            // Drives the bot's *first* hero-position measurement (see
+            // applyBotRect's effect above) — deliberately not fired until
+            // this entrance animation actually finishes, since
+            // contentRef's rect reads wrong while this is still mid-scale.
+            onAnimationComplete={() => { if (open) applyBotRect(); }}
             transition={
               // The default spring (tuned for the old, barely-there
               // 0.96→1 fade) resolves a 0.04→1 genie range in well under
@@ -426,7 +450,7 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                 ? { type: 'tween', duration: 0.48, ease: [0.16, 1, 0.3, 1] }
                 : { type: 'spring', stiffness: 340, damping: 32 }
             }
-            className="relative flex h-[90vh] max-h-[880px] w-[94vw] max-w-[1180px] flex-col overflow-hidden rounded-[12px] border border-white/15"
+            className="relative flex h-[88vh] max-h-[580px] w-[94vw] max-w-[760px] flex-col overflow-hidden rounded-[12px] border border-white/15"
             style={{
               background: 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
               backdropFilter: 'blur(36px) saturate(180%)',

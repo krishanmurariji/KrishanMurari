@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useYouTubePlayer, searchYouTube, type YouTubeTrack } from '../../lib/youtube-player';
 import { loadJSON, saveJSON } from '../../lib/storage';
 import spotifyLoadingAnimation from '../../assets/spotify-loading.svg';
+import Hyperspeed from '../ui/Hyperspeed';
 
 const MAX_RECENT_TRACKS = 8;
 // The supplied animation doesn't reach its full-size green circle until
@@ -114,13 +115,6 @@ function VolumeIcon(props: React.SVGProps<SVGSVGElement>) {
       <polygon points="4 9 8 9 12 5 12 19 8 15 4 15 4 9" fill="currentColor" stroke="none" />
       <path d="M16 8.5a5 5 0 0 1 0 7" />
       <path d="M18.5 6a8.5 8.5 0 0 1 0 12" />
-    </svg>
-  );
-}
-function HeartIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
     </svg>
   );
 }
@@ -332,6 +326,17 @@ export default function SpotifyApp() {
     <div ref={containerRef} className="relative flex h-full w-full flex-col overflow-hidden text-white" style={{ background: BG }}>
       <style>{'@keyframes eq { 0%, 100% { height: 30%; } 50% { height: 100%; } }'}</style>
 
+      {/* Background — a real (memoized-by-default-options, so this never
+          recreates the WebGL scene on re-render) three.js highway of
+          streaking car lights, behind everything else. A dark scrim sits
+          between it and the real content so the search field, track list
+          and transport controls all stay legible over the busier bits of
+          the animation rather than just laid bare on top of it. */}
+      <div className="absolute inset-0 z-0">
+        <Hyperspeed />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,10,10,0.55), rgba(10,10,10,0.8) 60%, rgba(10,10,10,0.92))' }} />
+      </div>
+
       <AnimatePresence>{showSplash && <SpotifySplash />}</AnimatePresence>
 
       {/* Header — a top scroll-free bar with the search pill, styled after
@@ -398,14 +403,16 @@ export default function SpotifyApp() {
           glyph, matching Spotify's own transport button, distinct from the
           green play buttons used on cards. */}
       {player.current && (
-        <div className="relative z-10 grid shrink-0 grid-cols-3 items-center gap-3 border-t border-white/10 px-4 py-3" style={{ background: '#0a0a0a' }}>
+        <div
+          className="relative z-10 grid shrink-0 grid-cols-3 items-center gap-3 border-t border-white/10 px-4 py-3"
+          style={{ background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <img src={player.current.thumbnail} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-white">{player.current.title}</div>
               <div className="truncate text-xs text-white/50">{player.current.channelTitle}</div>
             </div>
-            <HeartIcon className="ml-1 hidden h-4 w-4 shrink-0 text-white/50 transition hover:text-white sm:block" />
           </div>
 
           <div className="flex flex-col items-center gap-1.5">

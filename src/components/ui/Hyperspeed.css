@@ -1,0 +1,15 @@
+/* Scoped to #spotify-hyperspeed rather than a bare `canvas` selector — this
+   app has several other canvases (react-three-fiber's own, CursorGrid's,
+   AppWindow's genie warp), and an unscoped rule here would silently apply
+   to all of them. */
+#spotify-hyperspeed {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: absolute;
+}
+
+#spotify-hyperspeed canvas {
+  width: 100%;
+  height: 100%;
+}

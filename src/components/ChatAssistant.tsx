@@ -611,20 +611,18 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                   className="w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition"
                   style={{ background: '#ff5f57', cursor: 'pointer' }}
                 />
-                {/* Hidden below sm (640px) per request — red/green stay.
-                    Full color/opacity like every real AppWindow's own
-                    traffic lights (see WindowChrome — those are never
-                    dimmed either, `disabled` there only ever gates the
-                    offscreen snapshot copies, not a real visible window) —
-                    a dimmed look here read as visibly broken rather than
-                    "a normal macOS title bar with two buttons this panel
-                    doesn't support yet". */}
+                {/* Hidden below sm (640px) per earlier request — red/green
+                    stay. Acts as a second close (this panel has no
+                    dock/tray to minimize into, unlike a real AppWindow, so
+                    there's nowhere else for "minimize" to actually go) —
+                    per request, rather than staying a disabled third dot
+                    that looked clickable and did nothing. */}
                 <button
                   type="button"
                   aria-label="Minimize"
-                  disabled
-                  className="hidden w-3.5 h-3.5 rounded-full border-none sm:block"
-                  style={{ background: '#febc2e', cursor: 'default' }}
+                  onClick={onClose}
+                  className="hidden w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition sm:block"
+                  style={{ background: '#febc2e', cursor: 'pointer' }}
                 />
                 <button
                   type="button"
@@ -728,16 +726,32 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
               className="flex shrink-0 flex-col items-center gap-2 px-6 pb-8 pt-2">
               {error && <div className="rounded-lg bg-red-500/15 px-3 py-1.5 text-[12px] text-red-300">{error}</div>}
 
-              {isFirstMessage && TURNSTILE_SITE_KEY && (
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={TURNSTILE_SITE_KEY}
-                  theme="dark"
-                  onVerify={setTurnstileToken}
-                  onExpire={() => setTurnstileToken(null)}
-                  onError={() => setTurnstileToken(null)}
-                />
-              )}
+              {/* Only rendered while actually needed — up until the first
+                  message is verified, not for the panel's whole lifetime —
+                  and removed the instant onVerify fires rather than sitting
+                  there showing its solved checkmark for however long the
+                  visitor keeps typing before actually hitting send. */}
+              <AnimatePresence initial={false}>
+                {isFirstMessage && TURNSTILE_SITE_KEY && !turnstileToken && (
+                  <motion.div
+                    key="turnstile"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <Turnstile
+                      ref={turnstileRef}
+                      siteKey={TURNSTILE_SITE_KEY}
+                      theme="dark"
+                      onVerify={setTurnstileToken}
+                      onExpire={() => setTurnstileToken(null)}
+                      onError={() => setTurnstileToken(null)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <div
                 className="flex w-full max-w-2xl items-end gap-2 rounded-[28px] border border-white/15 bg-white/10 p-2 pl-4 shadow-lg backdrop-blur-xl"

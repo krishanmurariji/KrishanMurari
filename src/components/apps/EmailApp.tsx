@@ -338,18 +338,32 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
                   widget there just meant two separate widget instances
                   loading on every page visit instead of one, wasting a
                   challenge render and producing the widget's own
-                  cross-origin postMessage console warning between them. */}
-              {interactive && TURNSTILE_SITE_KEY && (
-                <motion.div custom={3} variants={fieldVariants} initial="hidden" animate="show" className="flex justify-center">
-                  <Turnstile
-                    ref={turnstileRef}
-                    siteKey={TURNSTILE_SITE_KEY}
-                    onVerify={setTurnstileToken}
-                    onExpire={() => setTurnstileToken(null)}
-                    onError={() => setTurnstileToken(null)}
-                  />
-                </motion.div>
-              )}
+                  cross-origin postMessage console warning between them.
+                  Only rendered while actually needed, too — removed the
+                  instant onVerify fires (!turnstileToken) rather than
+                  sitting there showing its solved checkmark for however
+                  long the visitor keeps filling in the rest of the form. */}
+              <AnimatePresence initial={false}>
+                {interactive && TURNSTILE_SITE_KEY && !turnstileToken && (
+                  <motion.div
+                    key="turnstile"
+                    custom={3}
+                    variants={fieldVariants}
+                    initial="hidden"
+                    animate="show"
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex justify-center overflow-hidden"
+                  >
+                    <Turnstile
+                      ref={turnstileRef}
+                      siteKey={TURNSTILE_SITE_KEY}
+                      onVerify={setTurnstileToken}
+                      onExpire={() => setTurnstileToken(null)}
+                      onError={() => setTurnstileToken(null)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <motion.div custom={4} variants={fieldVariants} initial="hidden" animate="show" className="flex justify-center">
                 <AnimatedSendButton status={status === 'sending' || status === 'sent' ? status : 'idle'} />

@@ -60,6 +60,11 @@ export default function App() {
   // PhotoCard, since the dock's Messages icon is now the only way to open
   // it (the Photo widget's bot is purely decorative).
   const [chatOpen, setChatOpen] = useState(false);
+  // The dock icon's rect at the moment it was clicked — same DockRect every
+  // other app's genie-open animation uses (see handleDockSelect below),
+  // passed down so ChatAssistant can grow out of that same point instead of
+  // just fading in from its own center, the way a real app window does.
+  const [chatOriginRect, setChatOriginRect] = useState<DockRect | null>(null);
   const confirmSignOut = useCallback(() => {
     clearAuthUser();
     setAuthUser(null);
@@ -181,6 +186,7 @@ export default function App() {
   // or discard it, just background it, exactly like real multi-tasking.
   const handleDockSelect = useCallback((id: string, rect: DockRect) => {
     if (id === 'chat') {
+      setChatOriginRect(rect);
       setChatOpen(true);
       return;
     }
@@ -360,7 +366,7 @@ export default function App() {
           sceneCanvasRef={sceneCanvasRef}
           isLight={isLight}
         />
-        <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} />
+        <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} originRect={chatOriginRect} />
 
         {/* Dimmed + frozen while editing widgets — same "everything else
             fades into the background" behavior as real macOS/iOS widget

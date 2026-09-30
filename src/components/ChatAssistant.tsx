@@ -19,13 +19,14 @@
 // multi-turn chat unusable. Per-IP and site-wide daily rate limits (the
 // Gemini free tier's request quota is shared across every visitor, not
 // per-visitor) are the ongoing defense after that.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
 import RobotAvatar3D, { type BotExpression } from './ui/RobotAvatar3D';
 import TextType from './ui/TextType';
 import CursorGrid from './ui/CursorGrid';
+import type { DockRect } from './MacDock';
 import { containsUnsafeContent } from '../lib/scriptDetection';
 import { playAngrySound, playThinkingSound, playReplySound } from '../lib/chatSounds';
 
@@ -33,6 +34,33 @@ import { playAngrySound, playThinkingSound, playReplySound } from '../lib/chatSo
 // own — long enough to register as a reaction, short enough not to still be
 // scowling by the time the visitor has fixed their message.
 const ANGRY_HOLD_MS = 1800;
+
+// The panel's own footprint, kept identical to its actual Tailwind classes
+// below (w-[94vw] max-w-[1180px], h-[90vh] max-h-[880px], centered) — used
+// only to compute where the genie's transform-origin should sit relative to
+// the panel, not to size anything. Measuring the panel's own rendered
+// bounding box instead would be wrong here: it's mid-transform (scaling up
+// from the genie's start point) for most of the time that measurement would
+// need to happen, so its rendered box doesn't reflect the final layout size
+// the origin math actually needs.
+function panelRect() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const width = Math.min(vw * 0.94, 1180);
+  const height = Math.min(vh * 0.9, 880);
+  return { left: (vw - width) / 2, top: (vh - height) / 2, width, height };
+}
+
+// How small the panel starts before growing to full size — small enough to
+// read as "emerging from the dock icon" like every other app window's
+// genie, without literally warping/distorting content the way the real
+// macOS genie (and this app's own AppWindow.tsx, via a canvas snapshot)
+// does; that machinery is built around the desktop-window/tray/minimize
+// system this panel doesn't have. A plain scale+transform-origin animation
+// gets the "grew out of that dock icon" read at a fraction of the
+// complexity, while keeping this panel's own size (the point of this
+// request) rather than shrinking to AppWindow's window dimensions.
+const GENIE_START_SCALE = 0.04;
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 const MAX_MESSAGE_LENGTH = 600;
@@ -65,7 +93,7 @@ declare global {
   }
 }
 
-export default function ChatAssistant({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function ChatAssistant({ open, onClose, originRect }: { open: boolean; onClose: () => void; originRect?: DockRect | null }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -79,6 +107,26 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
   const contentRef = useRef<HTMLDivElement>(null);
   const angryTimeoutRef = useRef<number | null>(null);
   const [botRect, setBotRect] = useState({ top: 0, left: 0, size: 192 });
+
+  // Genie open — see GENIE_START_SCALE's comment. Computed with
+  // useLayoutEffect (not useEffect) so it's in place before the browser
+  // ever paints the opening frame, the same "avoid a one-frame flash of the
+  // wrong state" reasoning as RobotAvatar3D's own visibility gating. Only
+  // recomputed while `open` is true — when it flips false, this
+  // deliberately does *not* reset, so the close animation still shrinks
+  // back toward the same point instead of snapping to some default origin
+  // mid-exit.
+  const [transformOrigin, setTransformOrigin] = useState('50% 50%');
+  useLayoutEffect(() => {
+    if (!open) return;
+    if (!originRect) { setTransformOrigin('50% 50%'); return; }
+    const panel = panelRect();
+    const originX = originRect.left + originRect.width / 2;
+    const originY = originRect.top + originRect.height / 2;
+    const px = ((originX - panel.left) / panel.width) * 100;
+    const py = ((originY - panel.top) / panel.height) * 100;
+    setTransformOrigin(`${px}% ${py}%`);
+  }, [open, originRect]);
   // The bot's own drop-bounce-settle-and-open-eyes intro plays out first,
   // with nothing else on screen — no greeting, no composer — until it's
   // actually finished (RobotAvatar3D's onIntroComplete): the bot lands,
@@ -350,16 +398,27 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
               read as its own unrelated modal style instead of the same
               "window" family as Profile/Experience/etc. */}
           <motion.div
-            initial={{ scale: 0.96, opacity: 0 }}
+            initial={{ scale: originRect ? GENIE_START_SCALE : 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.97, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 340, damping: 32 }}
+            exit={{ scale: originRect ? GENIE_START_SCALE : 0.97, opacity: 0 }}
+            transition={
+              // The default spring (tuned for the old, barely-there
+              // 0.96→1 fade) resolves a 0.04→1 genie range in well under
+              // 100ms — way too fast to read as "growing out of the dock
+              // icon". DUR below matches AppWindow's own genie timing
+              // (see that file's `DUR = 480`) with an expo-out curve for
+              // the same decelerate-into-place feel as its per-row warp.
+              originRect
+                ? { type: 'tween', duration: 0.48, ease: [0.16, 1, 0.3, 1] }
+                : { type: 'spring', stiffness: 340, damping: 32 }
+            }
             className="relative flex h-[90vh] max-h-[880px] w-[94vw] max-w-[1180px] flex-col overflow-hidden rounded-[12px] border border-white/15"
             style={{
               background: 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
               backdropFilter: 'blur(36px) saturate(180%)',
               WebkitBackdropFilter: 'blur(36px) saturate(180%)',
               boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
+              transformOrigin,
             }}
           >
             {/* A faint magenta grid that only lights up right around the

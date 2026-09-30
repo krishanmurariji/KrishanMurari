@@ -40,12 +40,9 @@ const ANGRY_HOLD_MS = 1800;
 // below (w-[94vw] max-w-[760px], h-[88vh] max-h-[580px], centered) — the
 // same WIN_W/WIN_H ceiling and viewport ratios every other app window uses
 // (see AppWindow.tsx), so this reads as "one of the app windows" instead of
-// its own oversized modal. Used only to compute where the genie's
-// transform-origin should sit relative to the panel, not to size anything.
-// Measuring the panel's own rendered bounding box instead would be wrong
-// here: it's mid-transform (scaling up from the genie's start point) for
-// most of the time that measurement would need to happen, so its rendered
-// box doesn't reflect the final layout size the origin math actually needs.
+// its own oversized modal. Used to convert the dock icon's real viewport
+// rect into a percentage position *within* the panel's own box for the
+// genie clip-path below.
 function panelRect() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -54,16 +51,60 @@ function panelRect() {
   return { left: (vw - width) / 2, top: (vh - height) / 2, width, height };
 }
 
-// How small the panel starts before growing to full size — small enough to
-// read as "emerging from the dock icon" like every other app window's
-// genie, without literally warping/distorting content the way the real
-// macOS genie (and this app's own AppWindow.tsx, via a canvas snapshot)
-// does; that machinery is built around the desktop-window/tray/minimize
-// system this panel doesn't have. A plain scale+transform-origin animation
-// gets the "grew out of that dock icon" read at a fraction of the
-// complexity, while keeping this panel's own size (the point of this
-// request) rather than shrinking to AppWindow's window dimensions.
-const GENIE_START_SCALE = 0.04;
+// A real macOS-style genie fold, reusing AppWindow.tsx's exact per-row
+// timing/easing (see that file's own renderGenie/eioC/eIn2/DUR) rather than
+// a plain CSS `transform: scale()` — a uniform scale reads as "zoom", not
+// "poured out of the dock icon", which is what a genie actually looks like.
+// AppWindow gets that fold by warping a *snapshot* of the window's content
+// row-by-row into an offscreen canvas; that doesn't work here, since this
+// panel's content is live (a real WebGL bot canvas, a live chat transcript)
+// rather than static marketing content, and this codebase has already hit
+// real, confirmed-live limits on sampling/cross-fading a WebGL canvas via a
+// snapshot (see GlassBackdrop's own comment on the same problem). Instead,
+// the panel's real DOM stays mounted at its actual final size the *entire*
+// time — no live-resizing, no snapshot — and only a `clip-path: polygon(…)`
+// animates over it, computed with the same per-row math so it reveals the
+// live content in the same folding shape a warp would, without ever
+// touching the content's own layout or the WebGL canvas at all.
+const DUR = 480;
+const GENIE_ROWS = 20;
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const eioC = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const eIn2 = (t: number) => t * t;
+
+function genieClipPath(rawT: number, dir: 'open' | 'minimize', dockX: number, dockY: number): string {
+  const left: [number, number][] = [];
+  const right: [number, number][] = [];
+  for (let i = 0; i <= GENIE_ROWS; i++) {
+    const r = i / GENIE_ROWS;
+    const rowXStart = dir === 'minimize' ? (1 - r) * 0.65 : r * 0.65;
+    const xE = eioC(clamp01((rawT - rowXStart) / (1 - rowXStart)));
+    const rowYStart = dir === 'minimize' ? (1 - r) * 0.2 : r * 0.2;
+    const yE = eIn2(clamp01((rawT - rowYStart) / (1 - rowYStart)));
+
+    let l: number, rr: number, y: number;
+    if (dir === 'open') {
+      l = lerp(dockX, 0, xE);
+      rr = lerp(dockX, 100, xE);
+      y = lerp(dockY, r * 100, yE);
+    } else {
+      l = lerp(0, dockX, xE);
+      rr = lerp(100, dockX, xE);
+      y = lerp(r * 100, dockY, yE);
+    }
+    // Each edge's Y is kept non-decreasing down the traversal — the
+    // per-row timing offsets above can otherwise let a later row's Y fall
+    // behind an earlier one, self-intersecting the polygon into a bowtie
+    // instead of a clean fold.
+    const prevL = left[left.length - 1];
+    const prevR = right[right.length - 1];
+    left.push([l, prevL ? Math.max(y, prevL[1]) : y]);
+    right.push([rr, prevR ? Math.max(y, prevR[1]) : y]);
+  }
+  const pts = [...left, ...right.reverse()];
+  return `polygon(${pts.map(([x, y]) => `${x.toFixed(2)}% ${y.toFixed(2)}%`).join(',')})`;
+}
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 const MAX_MESSAGE_LENGTH = 600;
@@ -114,25 +155,6 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   const contentRef = useRef<HTMLDivElement>(null);
   const angryTimeoutRef = useRef<number | null>(null);
 
-  // Genie open — see GENIE_START_SCALE's comment. Computed with
-  // useLayoutEffect (not useEffect) so it's in place before the browser
-  // ever paints the opening frame, the same "avoid a one-frame flash of the
-  // wrong state" reasoning as RobotAvatar3D's own visibility gating. Only
-  // recomputed while `open` is true — when it flips false, this
-  // deliberately does *not* reset, so the close animation still shrinks
-  // back toward the same point instead of snapping to some default origin
-  // mid-exit.
-  const [transformOrigin, setTransformOrigin] = useState('50% 50%');
-  useLayoutEffect(() => {
-    if (!open) return;
-    if (!originRect) { setTransformOrigin('50% 50%'); return; }
-    const panel = panelRect();
-    const originX = originRect.left + originRect.width / 2;
-    const originY = originRect.top + originRect.height / 2;
-    const px = ((originX - panel.left) / panel.width) * 100;
-    const py = ((originY - panel.top) / panel.height) * 100;
-    setTransformOrigin(`${px}% ${py}%`);
-  }, [open, originRect]);
   // The bot's own drop-bounce-settle-and-open-eyes intro plays out first,
   // with nothing else on screen — no greeting, no composer — until it's
   // actually finished (RobotAvatar3D's onIntroComplete): the bot lands,
@@ -140,18 +162,105 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // both the greeting (TextType below) and the composer off this same
   // flag rather than showing everything the instant the panel opens.
   const [introDone, setIntroDone] = useState(false);
-  // Gates mounting the bot's <Canvas> until the panel's own entrance
-  // animation (the genie scale-up, or the plain 0.96→1 spring) has
-  // actually finished — react-three-fiber measures its container via
-  // getBoundingClientRect() once at mount to size the canvas, which reads
-  // the ancestor panel's transiently *scaled-down* rect while that
-  // animation is still running; since the wrapper's own CSS size never
-  // changes afterward (it's a fixed Tailwind size, not something animated
-  // in), no ResizeObserver ever fires to correct that first bad read, and
-  // the canvas is stuck rendering at a few pixels for good. Delaying the
-  // mount until the transform has settled means that first measurement is
-  // the real, correct one.
-  const [entranceDone, setEntranceDone] = useState(false);
+
+  // The panel's own open/close lifecycle, driving the genie clip-path (see
+  // genieClipPath's own comment) — 'closed' means genuinely unmounted, not
+  // just visually hidden, so `open` flipping false doesn't remove the panel
+  // until its ~480ms closing fold has actually finished playing.
+  type Phase = 'closed' | 'opening' | 'open' | 'closing';
+  const [phase, setPhase] = useState<Phase>('closed');
+  // Mirrors `phase`, read (not `phase` itself) inside the effect below so
+  // that effect's dependency array can stay just `[open]` — including
+  // `phase` there would re-run this effect every time it's the one thing
+  // that just set `phase`, an infinite loop.
+  const phaseRef = useRef<Phase>('closed');
+  const panelRef = useRef<HTMLDivElement>(null);
+  const genieRafRef = useRef(0);
+  const genieSettleRef = useRef<number | undefined>(undefined);
+  const genieTokenRef = useRef(0);
+  // `open` and `originRect` land in the same render (see App.tsx's
+  // handleDockSelect, which sets both together), so reading the prop
+  // directly at the moment a genie starts is already correct — no need for
+  // AppWindow.tsx's own lastOriginRect-ref dance, which exists there to
+  // survive a *later* originRect prop change mid-session that this panel's
+  // simpler open/close lifecycle never has.
+  const runPanelGenie = (dir: 'open' | 'minimize', onSettle: () => void) => {
+    cancelAnimationFrame(genieRafRef.current);
+    window.clearTimeout(genieSettleRef.current);
+    const token = ++genieTokenRef.current;
+
+    const panel = panelRect();
+    const dockX = originRect ? originRect.left + originRect.width / 2 : panel.left + panel.width / 2;
+    const dockY = originRect ? originRect.top + originRect.height / 2 : panel.top + panel.height / 2;
+    const dockXPercent = ((dockX - panel.left) / panel.width) * 100;
+    const dockYPercent = ((dockY - panel.top) / panel.height) * 100;
+
+    const applyClip = (rawT: number) => {
+      if (panelRef.current) panelRef.current.style.clipPath = genieClipPath(rawT, dir, dockXPercent, dockYPercent);
+    };
+    // Set synchronously (this only ever runs inside a useLayoutEffect
+    // below, before the browser paints) rather than waiting for the first
+    // requestAnimationFrame callback — rAF always waits for the *next*
+    // paint, which would otherwise let one frame render with no clip-path
+    // at all (the panel's full, unclipped box) right as a genie starts.
+    applyClip(0);
+
+    let settled = false;
+    const settle = () => {
+      if (settled || genieTokenRef.current !== token) return;
+      settled = true;
+      cancelAnimationFrame(genieRafRef.current);
+      window.clearTimeout(genieSettleRef.current);
+      if (panelRef.current) panelRef.current.style.clipPath = dir === 'open' ? 'none' : genieClipPath(1, dir, dockXPercent, dockYPercent);
+      onSettle();
+    };
+    genieSettleRef.current = window.setTimeout(settle, DUR + 150);
+
+    let start: number | null = null;
+    const frame = (ts: number) => {
+      if (genieTokenRef.current !== token) return;
+      if (start === null) start = ts;
+      const rawT = clamp01((ts - start) / DUR);
+      applyClip(rawT);
+      if (rawT < 1) genieRafRef.current = requestAnimationFrame(frame);
+      else settle();
+    };
+    genieRafRef.current = requestAnimationFrame(frame);
+  };
+
+  // Reacts only to `open` itself (see phaseRef's own comment) — starts the
+  // opening fold the moment `open` turns true, and the closing fold the
+  // moment it turns false, from whatever phase the panel is actually in
+  // (so a close requested mid-open still folds smoothly rather than
+  // snapping). useLayoutEffect, not useEffect, so the very first
+  // (rawT===0) clip-path is in place before the browser paints the opening
+  // frame — the same "avoid a one-frame flash of the wrong state"
+  // reasoning as RobotAvatar3D's own visibility gating.
+  useLayoutEffect(() => {
+    if (open) {
+      if (phaseRef.current === 'closed') {
+        phaseRef.current = 'opening';
+        setPhase('opening');
+        runPanelGenie('open', () => {
+          phaseRef.current = 'open';
+          setPhase('open');
+        });
+      }
+    } else if (phaseRef.current !== 'closed') {
+      phaseRef.current = 'closing';
+      setPhase('closing');
+      runPanelGenie('minimize', () => {
+        phaseRef.current = 'closed';
+        setPhase('closed');
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => () => {
+    cancelAnimationFrame(genieRafRef.current);
+    window.clearTimeout(genieSettleRef.current);
+  }, []);
 
   const hasStarted = messages.length > 0;
   const isFirstMessage = messages.length === 0;
@@ -187,7 +296,6 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
       setAngryFlash(false);
       if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
       setIntroDone(false);
-      setEntranceDone(false);
     }
   }, [open]);
 
@@ -311,62 +419,45 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   };
 
   return createPortal(
-    <AnimatePresence>
-      {open && (
+    phase !== 'closed' && (
+      <div className="fixed inset-0 z-[100004] flex items-center justify-center p-4">
+        {/* Only the backdrop fades on its own quick timer — the panel's
+            own visibility is entirely the clip-path genie below (see
+            genieClipPath), not opacity. An earlier version put this
+            opacity animation on the *outer* wrapper (this dim, and the
+            panel, together), which faded the whole thing — panel
+            included — to invisible in 150ms while the panel's own
+            480ms closing fold was barely a third done, making it look
+            like the fold never played at all. */}
         <motion.div
-          key="chat-assistant"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          initial={false}
+          animate={{ opacity: phase === 'closing' ? 0 : 1 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100004] flex items-center justify-center p-4"
-        >
-          <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+          className="absolute inset-0 bg-black/50"
+          onClick={onClose}
+        />
 
-          {/* The glass panel itself — sized to the same WIN_W×WIN_H
-              footprint (760×580, clamped to the viewport) every other app
-              window uses (see AppWindow.tsx's getOpenSize()), rather than
-              its own larger one-off size. Border radius (12px) and shadow
-              also match the real app windows' (see WindowChrome/
-              AppWindow.tsx — `borderRadius: 12`, `boxShadow: '0 6px 14px
-              rgba(0,0,0,0.28)'`), so this reads as the same "window" family
-              as Profile/Experience/etc. rather than a bespoke modal. */}
-          <motion.div
-            initial={{ scale: originRect ? GENIE_START_SCALE : 0.96, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: originRect ? GENIE_START_SCALE : 0.97, opacity: 0 }}
-            // Only fires once, for the entrance (this panel's `animate`
-            // target never changes across re-renders, so Framer Motion
-            // doesn't re-run or re-fire this for anything else) — see
-            // entranceDone's own comment for what this unblocks.
-            onAnimationComplete={() => { if (open) setEntranceDone(true); }}
-            transition={
-              // The default spring (tuned for the old, barely-there
-              // 0.96→1 fade) resolves a 0.04→1 genie range in well under
-              // 100ms — way too fast to read as "growing out of the dock
-              // icon". Duration matches AppWindow's own genie timing (see
-              // that file's `DUR = 480`) — but critically, so does the
-              // *shape* of the curve: an ease-out (fast-start,
-              // slow-finish) front-loads almost all of a 0.04→1 scale
-              // jump into the first ~100ms, then spends the remaining
-              // ~380ms on a change too small to see — reading as an
-              // instant pop, not a grow. AppWindow's own genie uses a
-              // quadratic ease-*in* (`eIn2 = t => t*t`) instead, which
-              // spreads the motion across the whole duration; this is
-              // that same curve as a cubic-bezier (easeInQuad).
-              originRect
-                ? { type: 'tween', duration: 0.48, ease: [0.55, 0.085, 0.68, 0.53] }
-                : { type: 'spring', stiffness: 340, damping: 32 }
-            }
-            className="relative flex h-[88vh] max-h-[580px] w-[94vw] max-w-[760px] flex-col overflow-hidden rounded-[12px] border border-white/15"
-            style={{
-              background: 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
-              backdropFilter: 'blur(36px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(36px) saturate(180%)',
-              boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
-              transformOrigin,
-            }}
-          >
+        {/* The glass panel itself — sized to the same WIN_W×WIN_H
+            footprint (760×580, clamped to the viewport) every other app
+            window uses (see AppWindow.tsx's getOpenSize()), rather than
+            its own larger one-off size. Border radius (12px) and shadow
+            also match the real app windows' (see WindowChrome/
+            AppWindow.tsx — `borderRadius: 12`, `boxShadow: '0 6px 14px
+            rgba(0,0,0,0.28)'`), so this reads as the same "window" family
+            as Profile/Experience/etc. rather than a bespoke modal. Always
+            rendered at its real final size — see genieClipPath's own
+            comment for why the fold is a clip-path over the live content
+            rather than a scale transform or a warped snapshot. */}
+        <div
+          ref={panelRef}
+          className="relative flex h-[88vh] max-h-[580px] w-[94vw] max-w-[760px] flex-col overflow-hidden rounded-[12px] border border-white/15"
+          style={{
+            background: 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
+            backdropFilter: 'blur(36px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(36px) saturate(180%)',
+            boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
+          }}
+        >
             {/* A faint magenta grid that only lights up right around the
                 cursor — pure background ambiance, sits behind everything
                 else (including the title bar below, which is translucent
@@ -467,11 +558,9 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                 decorative behind real content — nothing here should ever
                 intercept a click meant for a message or the composer. */}
             <div ref={contentRef} className="relative min-h-0 flex-1">
-              {entranceDone && (
-                <div className="pointer-events-none absolute left-1/2 top-[38%] z-0 h-36 w-36 -translate-x-1/2 -translate-y-1/2 sm:h-48 sm:w-48">
-                  <RobotAvatar3D className="h-full w-full" expression={expression} onIntroComplete={() => setIntroDone(true)} />
-                </div>
-              )}
+              <div className="pointer-events-none absolute left-1/2 top-[38%] z-0 h-36 w-36 -translate-x-1/2 -translate-y-1/2 sm:h-48 sm:w-48">
+                <RobotAvatar3D className="h-full w-full" expression={expression} onIntroComplete={() => setIntroDone(true)} />
+              </div>
 
               <AnimatePresence>
                 {/* Only mounts once the bot's own landing has finished
@@ -608,10 +697,9 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                 </button>
               </div>
             </motion.div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>,
+          </div>
+      </div>
+    ),
     document.body
   );
 }

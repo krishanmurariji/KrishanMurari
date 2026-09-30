@@ -199,11 +199,8 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
 
   // The docked bot's header row: the transcript starts below it (never
   // beside it, so messages stay flush left instead of squeezed right of a
-  // floating icon), and the close button's vertical center is pinned to the
-  // bot's, so it visually reads as one header rather than two unrelated
-  // floating controls.
+  // floating icon).
   const headerHeight = hasStarted ? botRect.top + botRect.size + 16 : 0;
-  const closeTop = hasStarted ? botRect.top + botRect.size / 2 - 18 : 20;
 
   // Stop any in-progress dictation the moment the panel closes, rather than
   // leaving the mic listening in the background after the UI it feeds is
@@ -345,23 +342,31 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
           <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
           {/* The glass panel itself — sized close to "modal-xl": most of a
-              big screen, comfortably contained on a small one. */}
+              big screen, comfortably contained on a small one. Border
+              radius (12px) and shadow now match the real app windows'
+              (see WindowChrome/AppWindow.tsx — `borderRadius: 12`,
+              `boxShadow: '0 6px 14px rgba(0,0,0,0.28)'`) rather than the
+              much bigger radius/heavier shadow this used to have, which
+              read as its own unrelated modal style instead of the same
+              "window" family as Profile/Experience/etc. */}
           <motion.div
             initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.97, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-            className="relative flex h-[90vh] max-h-[880px] w-[94vw] max-w-[1180px] flex-col overflow-hidden rounded-[32px] border border-white/15 shadow-2xl"
+            className="relative flex h-[90vh] max-h-[880px] w-[94vw] max-w-[1180px] flex-col overflow-hidden rounded-[12px] border border-white/15"
             style={{
               background: 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
               backdropFilter: 'blur(36px) saturate(180%)',
               WebkitBackdropFilter: 'blur(36px) saturate(180%)',
+              boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
             }}
           >
             {/* A faint magenta grid that only lights up right around the
                 cursor — pure background ambiance, sits behind everything
-                else in normal DOM order and never intercepts clicks
-                (CursorGrid's own canvas is pointer-events: none). */}
+                else (including the title bar below, which is translucent
+                enough to show a blurred hint of it) and never intercepts
+                clicks (CursorGrid's own canvas is pointer-events: none). */}
             <CursorGrid
               cellSize={70}
               color="#D946EF"
@@ -378,27 +383,66 @@ export default function ChatAssistant({ open, onClose }: { open: boolean; onClos
               pulseSpeed={600}
             />
 
+            {/* A real title bar, matching WindowChrome's exactly (same
+                height, gradient, blur, specular sheen, traffic-light
+                buttons) instead of a single floating "✕" — this is the
+                piece that actually reads as "the same window design as
+                every other app" rather than a bespoke modal. Minimize and
+                the green "windowed" button are disabled — this panel
+                doesn't have either concept — but stay visible so the
+                three-dot cluster itself still reads as a normal macOS
+                title bar rather than a lone close button. */}
+            <div
+              className="flex items-center px-4 shrink-0 relative overflow-hidden"
+              style={{
+                height: 42,
+                background: 'linear-gradient(180deg, rgba(58,58,61,0.55), rgba(35,35,37,0.55))',
+                backdropFilter: 'blur(20px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                borderBottom: '1px solid rgba(255,255,255,.08)',
+              }}
+            >
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.14), transparent 60%)', mixBlendMode: 'screen' }}
+              />
+              <div className="flex items-center gap-2 z-10">
+                <button
+                  type="button"
+                  aria-label="Close chat"
+                  onClick={onClose}
+                  className="w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition"
+                  style={{ background: '#ff5f57', cursor: 'pointer' }}
+                />
+                <button
+                  type="button"
+                  aria-label="Minimize"
+                  disabled
+                  className="w-3.5 h-3.5 rounded-full border-none"
+                  style={{ background: '#febc2e', cursor: 'default', opacity: 0.5 }}
+                />
+                <button
+                  type="button"
+                  aria-label="Fill screen"
+                  disabled
+                  className="w-3.5 h-3.5 rounded-full border-none"
+                  style={{ background: '#28c840', cursor: 'default', opacity: 0.5 }}
+                />
+              </div>
+              <span
+                className="absolute inset-x-0 text-center text-xs font-medium pointer-events-none"
+                style={{ color: 'rgba(255,255,255,.55)' }}
+              >
+                I
+              </span>
+            </div>
+
             {/* A soft inner highlight along the top edge — the detail that
                 sells "glass" rather than just "dark translucent panel". */}
             <div
               className="pointer-events-none absolute inset-x-0 top-0 h-24"
               style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0))' }}
             />
-
-            {/* No dedicated header bar in the JSX — but once the bot docks
-                to the top-left, this close control tracks its vertical
-                center so the two read as one header row together. */}
-            <motion.button
-              type="button"
-              onClick={onClose}
-              aria-label="Close chat"
-              animate={{ top: closeTop }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              style={{ position: 'absolute' }}
-              className="right-5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 backdrop-blur transition hover:bg-white/20 hover:text-white"
-            >
-              ✕
-            </motion.button>
 
             {/* Main content. The bot is a single, never-unmounted <Canvas>
                 instance throughout — its wrapper's box only ever snaps

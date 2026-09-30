@@ -26,6 +26,7 @@ import Turnstile, { type TurnstileHandle } from './ui/Turnstile';
 import RobotAvatar3D, { type BotExpression } from './ui/RobotAvatar3D';
 import TextType from './ui/TextType';
 import CursorGrid from './ui/CursorGrid';
+import VoicePill from './ui/VoicePill';
 import type { DockRect } from './MacDock';
 import { containsUnsafeContent } from '../lib/scriptDetection';
 import { playAngrySound, playThinkingSound, playReplySound } from '../lib/chatSounds';
@@ -99,11 +100,15 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const [listening, setListening] = useState(false);
   const [angryFlash, setAngryFlash] = useState(false);
   const turnstileRef = useRef<TurnstileHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // Set right before recognitionRef.stop() when a VoicePill hold gesture is
+  // slid past cancelDistance — the Web Speech API still fires one last
+  // onresult with whatever it transcribed before stop() lands, and a
+  // cancelled recording shouldn't have that text land in the composer.
+  const dictationCancelledRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const angryTimeoutRef = useRef<number | null>(null);
   const [botRect, setBotRect] = useState({ top: 0, left: 0, size: 192 });
@@ -256,7 +261,6 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   useEffect(() => {
     if (!open) {
       recognitionRef.current?.stop();
-      setListening(false);
       setAngryFlash(false);
       if (angryTimeoutRef.current) window.clearTimeout(angryTimeoutRef.current);
       setBotVisible(true);
@@ -354,26 +358,36 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
     }
   };
 
-  const handleSpeak = () => {
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
+  // VoicePill's onStart — begins Web Speech API dictation into the
+  // composer. Doesn't record/send an actual audio clip (this app's backend
+  // only ever takes text — see api/chat.ts's ChatMessage shape); VoicePill
+  // is here purely as a nicer hold-to-record/slide-to-cancel affordance
+  // wrapped around the same dictation this button always did.
+  const startDictation = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
+    dictationCancelledRef.current = false;
     const recognition = new SR();
     recognition.lang = 'en-US';
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (e) => {
+      if (dictationCancelledRef.current) return;
       const transcript = e.results[0]?.[0]?.transcript;
       if (transcript) setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
     };
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
+    recognition.onend = () => { recognitionRef.current = null; };
+    recognition.onerror = () => { recognitionRef.current = null; };
     recognitionRef.current = recognition;
     recognition.start();
-    setListening(true);
+  };
+
+  // VoicePill's onStop — a slide-past-cancelDistance stop discards
+  // whatever gets transcribed (see dictationCancelledRef above); any other
+  // stop reason (tap-to-stop, hold released) keeps it.
+  const stopDictation = (cancelled: boolean) => {
+    dictationCancelledRef.current = cancelled;
+    recognitionRef.current?.stop();
   };
 
   return createPortal(
@@ -633,17 +647,29 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                   className="max-h-28 min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[14px] text-white placeholder:text-white/40 outline-none disabled:opacity-50"
                 />
                 {speechSupported && (
-                  <button
-                    type="button"
-                    onClick={handleSpeak}
-                    aria-label={listening ? 'Stop dictation' : 'Speak your message'}
-                    aria-pressed={listening}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
-                      listening ? 'bg-red-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
-                    }`}
-                  >
-                    <MicIcon className="h-[18px] w-[18px]" />
-                  </button>
+                  <VoicePill
+                    accentColor="#f5f5f5"
+                    iconColor="#a1a1aa"
+                    background="#27272a"
+                    size={28}
+                    shape="pill"
+                    reach={8}
+                    showTime
+                    waveform
+                    slideToCancel
+                    cancelDistance={64}
+                    attack={40}
+                    release={240}
+                    sensitivity={1}
+                    floor={0.1}
+                    openDuration={200}
+                    pressScale={0.95}
+                    mode="auto"
+                    holdAfter={300}
+                    reactive="simulated"
+                    onStart={() => startDictation()}
+                    onStop={({ reason }) => stopDictation(reason === 'cancelled')}
+                  />
                 )}
                 <button
                   type="button"
@@ -752,15 +778,6 @@ function TypingBubble() {
   );
 }
 
-function MicIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M12 18v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function SendIcon(props: React.SVGProps<SVGSVGElement>) {
   return (

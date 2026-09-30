@@ -631,21 +631,26 @@ export default function AppWindow({
             width: trayRect.width,
             height: trayRect.height,
             zIndex: trayHovered ? 100001 : 100000,
-            // A guaranteed solid base layer — if the snapshot capture ever
-            // produces something less than fully opaque despite the blank-
-            // canvas check above (e.g. partial content), this still keeps the
-            // tile from reading as "transparent" rather than a real preview.
             background: '#1c1c1e',
             boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
           }}
         >
-          {snapshotsRef.current[app.id] ? (
-            <img src={snapshotsRef.current[app.id].toDataURL()} alt="" className="w-full h-full object-cover pointer-events-none" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <app.icon className="w-1/2 h-1/2" />
-            </div>
-          )}
+          {/* Always the app's own icon on this solid dark tile now — never
+              the captured window-body snapshot. That snapshot's
+              isCanvasBlank() check only catches a fully *transparent*
+              capture; a genuinely-empty-but-opaque one (the lazy body's
+              Suspense fallback is `null`, so a capture that lands before
+              that chunk has finished loading paints nothing but the
+              window's own white background) passed it anyway, showing up
+              here as a plain blank-white tile instead of a real preview or
+              a fallback icon. A flat icon on a solid tile is also just a
+              cleaner, more consistent dock-tray look than a tiny, often
+              illegible window-content thumbnail — matches ChatAssistant's
+              own tray tile, which never had a snapshot to fall back from in
+              the first place. */}
+          <div className="w-full h-full flex items-center justify-center">
+            <app.icon className="w-1/2 h-1/2" />
+          </div>
         </button>
       )}
     </>

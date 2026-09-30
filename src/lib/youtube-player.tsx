@@ -64,9 +64,16 @@ export async function searchYouTube(query: string): Promise<YouTubeTrack[]> {
       id: item.id.videoId,
       title: item.snippet?.title ?? 'Untitled',
       channelTitle: item.snippet?.channelTitle ?? '',
+      // `high` (480×360) over `medium` (320×180) — the search endpoint
+      // never returns anything bigger than `high` (no `standard`/`maxres`
+      // here, unlike videos.list), but `medium` was being picked first
+      // simply because it's virtually always present, capping every
+      // thumbnail at 320×180 even when a sharper one was sitting right
+      // there. That's what was reading as "low quality" once stretched
+      // across the desktop widget's large narrow card.
       thumbnail:
-        item.snippet?.thumbnails?.medium?.url ??
         item.snippet?.thumbnails?.high?.url ??
+        item.snippet?.thumbnails?.medium?.url ??
         item.snippet?.thumbnails?.default?.url ??
         '',
     }));

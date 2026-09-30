@@ -28,6 +28,7 @@ import TextType from './ui/TextType';
 import CursorGrid from './ui/CursorGrid';
 import VoicePill from './ui/VoicePill';
 import type { DockRect } from './MacDock';
+import { MessagesIcon } from './MacIcons';
 import { containsUnsafeContent } from '../lib/scriptDetection';
 import { playAngrySound, playThinkingSound, playReplySound } from '../lib/chatSounds';
 
@@ -152,7 +153,33 @@ declare global {
   }
 }
 
-export default function ChatAssistant({ open, onClose, originRect }: { open: boolean; onClose: () => void; originRect?: DockRect | null }) {
+export default function ChatAssistant({
+  open,
+  onClose,
+  originRect,
+  minimized,
+  trayRect,
+  onMinimize,
+  onRestore,
+}: {
+  open: boolean;
+  onClose: () => void;
+  originRect?: DockRect | null;
+  /** Mirrors AppWindow's own `minimized` — true once the yellow button's
+   * genie has folded the panel down into its dock tray tile. `open` stays
+   * true the whole time (this is "running, tucked away", not closed), so
+   * the conversation (plain useState in this same component, never
+   * unmounted) survives minimize/restore exactly like it already survives
+   * a full close/reopen. */
+  minimized?: boolean;
+  /** The dock's own minimized-tray slot rect for this panel — same shape
+   * AppWindow reads from MacDock's onTrayRectChange, passed through here
+   * so the minimize/restore genie has a real target to fold toward/from
+   * instead of always the Messages dock icon. */
+  trayRect?: DockRect | null;
+  onMinimize?: () => void;
+  onRestore?: () => void;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -183,18 +210,23 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   // flag rather than showing everything the instant the panel opens.
   const [introDone, setIntroDone] = useState(false);
 
-  // The panel's own open/close lifecycle, driving the genie clip-path (see
-  // genieClipPath's own comment) — 'closed' means genuinely unmounted, not
-  // just visually hidden, so `open` flipping false doesn't remove the panel
-  // until its ~480ms closing fold has actually finished playing.
-  type Phase = 'closed' | 'opening' | 'open' | 'closing';
+  // The panel's own open/close/minimize lifecycle, driving the genie
+  // clip-path (see genieClipPath's own comment) — 'closed' means genuinely
+  // unmounted, not just visually hidden, so `open` flipping false doesn't
+  // remove the panel until its ~480ms closing fold has actually finished
+  // playing. 'min' is the tray-tucked counterpart of 'closed' — the panel
+  // itself stops rendering (replaced by the small tray tile below), but
+  // `open` stays true the whole time, so this never touches the
+  // conversation state the way a real close/reopen doesn't either.
+  type Phase = 'closed' | 'opening' | 'open' | 'closing' | 'minimizing' | 'min' | 'restoring';
   const [phase, setPhase] = useState<Phase>('closed');
   // Mirrors `phase`, read (not `phase` itself) inside the effect below so
-  // that effect's dependency array can stay just `[open]` — including
-  // `phase` there would re-run this effect every time it's the one thing
-  // that just set `phase`, an infinite loop.
+  // that effect's dependency array can stay just `[open, minimized]` —
+  // including `phase` there would re-run this effect every time it's the
+  // one thing that just set `phase`, an infinite loop.
   const phaseRef = useRef<Phase>('closed');
   const panelRef = useRef<HTMLDivElement>(null);
+  const [trayHovered, setTrayHovered] = useState(false);
   // The title bar's green button — panelRect() (what the genie folds
   // toward/from) always reflects the *normal* centered size regardless of
   // this, so fullscreen is forced back off the moment a close starts (see
@@ -205,20 +237,24 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   const genieRafRef = useRef(0);
   const genieSettleRef = useRef<number | undefined>(undefined);
   const genieTokenRef = useRef(0);
-  // `open` and `originRect` land in the same render (see App.tsx's
+  // `open`/`originRect` land in the same render (see App.tsx's
   // handleDockSelect, which sets both together), so reading the prop
   // directly at the moment a genie starts is already correct — no need for
   // AppWindow.tsx's own lastOriginRect-ref dance, which exists there to
   // survive a *later* originRect prop change mid-session that this panel's
-  // simpler open/close lifecycle never has.
-  const runPanelGenie = (dir: 'open' | 'minimize', onSettle: () => void) => {
+  // simpler lifecycle never has. `target` is passed explicitly (rather than
+  // always reading originRect from the closure) so the exact same function
+  // drives both the open/close fold (toward the Messages dock icon) and the
+  // minimize/restore fold (toward the dock's tray tile) — just a different
+  // point to fold toward/from, same math either way.
+  const runPanelGenie = (dir: 'open' | 'minimize', target: DockRect | null | undefined, onSettle: () => void) => {
     cancelAnimationFrame(genieRafRef.current);
     window.clearTimeout(genieSettleRef.current);
     const token = ++genieTokenRef.current;
 
     const panel = panelRect();
-    const dockX = originRect ? originRect.left + originRect.width / 2 : panel.left + panel.width / 2;
-    const dockY = originRect ? originRect.top + originRect.height / 2 : panel.top + panel.height / 2;
+    const dockX = target ? target.left + target.width / 2 : panel.left + panel.width / 2;
+    const dockY = target ? target.top + target.height / 2 : panel.top + panel.height / 2;
     const dockXPercent = ((dockX - panel.left) / panel.width) * 100;
     const dockYPercent = ((dockY - panel.top) / panel.height) * 100;
 
@@ -255,35 +291,92 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
     genieRafRef.current = requestAnimationFrame(frame);
   };
 
-  // Reacts only to `open` itself (see phaseRef's own comment) — starts the
-  // opening fold the moment `open` turns true, and the closing fold the
-  // moment it turns false, from whatever phase the panel is actually in
-  // (so a close requested mid-open still folds smoothly rather than
-  // snapping). useLayoutEffect, not useEffect, so the very first
-  // (rawT===0) clip-path is in place before the browser paints the opening
-  // frame — the same "avoid a one-frame flash of the wrong state"
-  // reasoning as RobotAvatar3D's own visibility gating.
+  // Tracks the previous `minimized` value so the effect below can tell a
+  // genuine minimize/restore request apart from an unrelated re-render —
+  // same purpose as AppWindow's own prevMinimized ref.
+  const prevMinimizedRef = useRef(false);
+  // Set when a minimize is requested before the dock has actually measured
+  // a tray slot for 'chat' yet — exactly AppWindow's own pendingMinimizeRef
+  // situation: the tray slot only mounts once 'chat' enters App.tsx's
+  // minimizedAppIds, which happens in the very same render that requests
+  // this minimize, so `trayRect` is necessarily still last render's value
+  // (null, on the session's first-ever minimize) at the moment this effect
+  // runs. Starting the genie right then would fold toward the fallback
+  // panel-center point instead of the dock. The effect below picks this up
+  // and actually starts the genie the instant a real trayRect arrives.
+  const pendingMinimizeRef = useRef(false);
+
+  // Reacts to `open` and `minimized` (see phaseRef's own comment) — starts
+  // the opening fold the moment `open` turns true, the closing fold the
+  // moment it turns false (from whatever phase the panel is actually in, so
+  // a close requested mid-open still folds smoothly rather than snapping),
+  // and — mirroring AppWindow's own minimize/restore — folds toward or from
+  // the dock's tray tile whenever `minimized` flips while the panel stays
+  // open. useLayoutEffect, not useEffect, so the very first (rawT===0)
+  // clip-path is in place before the browser paints the changed frame — the
+  // same "avoid a one-frame flash of the wrong state" reasoning as
+  // RobotAvatar3D's own visibility gating.
   useLayoutEffect(() => {
     if (open) {
       if (phaseRef.current === 'closed') {
         phaseRef.current = 'opening';
         setPhase('opening');
-        runPanelGenie('open', () => {
+        runPanelGenie('open', originRect, () => {
           phaseRef.current = 'open';
           setPhase('open');
         });
+      } else if (!!minimized !== prevMinimizedRef.current) {
+        if (minimized) {
+          setFullscreen(false);
+          if (trayRect) {
+            phaseRef.current = 'minimizing';
+            setPhase('minimizing');
+            runPanelGenie('minimize', trayRect, () => {
+              phaseRef.current = 'min';
+              setPhase('min');
+            });
+          } else {
+            pendingMinimizeRef.current = true;
+          }
+        } else {
+          pendingMinimizeRef.current = false;
+          if (phaseRef.current === 'min' || phaseRef.current === 'minimizing') {
+            phaseRef.current = 'restoring';
+            setPhase('restoring');
+            runPanelGenie('open', trayRect, () => {
+              phaseRef.current = 'open';
+              setPhase('open');
+            });
+          }
+        }
       }
     } else if (phaseRef.current !== 'closed') {
       phaseRef.current = 'closing';
       setPhase('closing');
       setFullscreen(false);
-      runPanelGenie('minimize', () => {
+      runPanelGenie('minimize', originRect, () => {
         phaseRef.current = 'closed';
         setPhase('closed');
       });
     }
+    prevMinimizedRef.current = !!minimized;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, minimized]);
+
+  // Picks up a minimize that arrived before the dock had a real trayRect to
+  // fold toward (see pendingMinimizeRef's own comment) the instant one
+  // shows up — mirrors AppWindow's identical follow-up effect.
+  useLayoutEffect(() => {
+    if (!pendingMinimizeRef.current || !trayRect) return;
+    pendingMinimizeRef.current = false;
+    phaseRef.current = 'minimizing';
+    setPhase('minimizing');
+    runPanelGenie('minimize', trayRect, () => {
+      phaseRef.current = 'min';
+      setPhase('min');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trayRect]);
 
   useEffect(() => () => {
     cancelAnimationFrame(genieRafRef.current);
@@ -344,6 +437,17 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
       setIntroDone(false);
     }
   }, [open]);
+
+  // Same, but for a minimize — the composer (and its mic button) just goes
+  // invisible rather than unmounting, so without this a recording started
+  // right before hitting the yellow button would otherwise keep listening
+  // silently in the background tray tile.
+  useEffect(() => {
+    if (minimized) {
+      dictationStoppingRef.current = true;
+      recognitionRef.current?.stop();
+    }
+  }, [minimized]);
 
   // Clear pending timers on unmount so they can't fire setState after the
   // component is gone.
@@ -508,7 +612,8 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
   };
 
   return createPortal(
-    phase !== 'closed' && (
+    <>
+    {phase !== 'closed' && phase !== 'min' && (
       <div className={`fixed inset-0 z-[100004] flex items-center justify-center ${fullscreen ? '' : 'p-4'}`}>
         {/* Only the backdrop fades on its own quick timer — the panel's
             own visibility is entirely the clip-path genie below (see
@@ -517,10 +622,12 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
             panel, together), which faded the whole thing — panel
             included — to invisible in 150ms while the panel's own
             480ms closing fold was barely a third done, making it look
-            like the fold never played at all. */}
+            like the fold never played at all. Fades out for a minimize
+            exactly like a close — both are "the dialog view is going
+            away" — and fades back in for a restore exactly like an open. */}
         <motion.div
           initial={false}
-          animate={{ opacity: phase === 'closing' ? 0 : 1 }}
+          animate={{ opacity: phase === 'closing' || phase === 'minimizing' ? 0 : 1 }}
           transition={{ duration: 0.15 }}
           className="absolute inset-0 bg-black/50"
           onClick={onClose}
@@ -612,15 +719,16 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
                   style={{ background: '#ff5f57', cursor: 'pointer' }}
                 />
                 {/* Hidden below sm (640px) per earlier request — red/green
-                    stay. Acts as a second close (this panel has no
-                    dock/tray to minimize into, unlike a real AppWindow, so
-                    there's nowhere else for "minimize" to actually go) —
-                    per request, rather than staying a disabled third dot
-                    that looked clickable and did nothing. */}
+                    stay. Now a real minimize, matching every other app
+                    window's yellow button: folds the panel down into its
+                    own dock tray tile (see the `phase === 'min'` block
+                    below) rather than closing it — the conversation stays
+                    exactly as it was since this component never unmounts,
+                    just like a full close/reopen already didn't lose it. */}
                 <button
                   type="button"
                   aria-label="Minimize"
-                  onClick={onClose}
+                  onClick={onMinimize}
                   className="hidden w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition sm:block"
                   style={{ background: '#febc2e', cursor: 'pointer' }}
                 />
@@ -813,7 +921,53 @@ export default function ChatAssistant({ open, onClose, originRect }: { open: boo
             </motion.div>
           </div>
       </div>
-    ),
+    )}
+
+    {/* The minimized tray tile — mirrors AppWindow's own (see that file's
+        `phase === 'min'` block): sits fixed directly on top of MacDock's
+        reserved tray slot for this app, mirroring that slot's measured
+        rect exactly (no separate scale/spring math needed, the library's
+        own hover-magnify already applies to the slot underneath). No live
+        snapshot to show (this panel is live DOM, not AppWindow's
+        canvas-warped content) — falls back straight to the Messages icon,
+        the same fallback AppWindow itself uses for an app it hasn't
+        captured a snapshot for yet. */}
+    {phase === 'min' && trayRect && (
+      <button
+        type="button"
+        onClick={onRestore}
+        onMouseEnter={() => setTrayHovered(true)}
+        onMouseLeave={() => setTrayHovered(false)}
+        // Forwards a synthetic mousemove to the dock-item/dock-wrapper
+        // sitting underneath this tile — see AppWindow's identical handler
+        // for why: this tile intercepts the real mousemove entirely, so
+        // without this the dock's own magnify engine never sees it move.
+        onMouseMove={(e) => {
+          const under = document
+            .elementsFromPoint(e.clientX, e.clientY)
+            .find((el) => el.tagName === 'DOCK-ITEM' || el.tagName === 'DOCK-WRAPPER');
+          under?.dispatchEvent(
+            new MouseEvent('mousemove', { bubbles: true, composed: true, clientX: e.clientX, clientY: e.clientY }),
+          );
+        }}
+        aria-label="Restore chat"
+        className="fixed rounded-2xl overflow-hidden cursor-pointer pointer-events-auto border-0 p-0"
+        style={{
+          left: trayRect.left,
+          top: trayRect.top,
+          width: trayRect.width,
+          height: trayRect.height,
+          zIndex: trayHovered ? 100001 : 100000,
+          background: '#1c1c1e',
+          boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
+        }}
+      >
+        <div className="w-full h-full flex items-center justify-center">
+          <MessagesIcon className="w-1/2 h-1/2" />
+        </div>
+      </button>
+    )}
+    </>,
     document.body
   );
 }

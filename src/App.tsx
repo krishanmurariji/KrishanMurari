@@ -65,6 +65,15 @@ export default function App() {
   // passed down so ChatAssistant can grow out of that same point instead of
   // just fading in from its own center, the way a real app window does.
   const [chatOriginRect, setChatOriginRect] = useState<DockRect | null>(null);
+  // Whether the chat panel is folded down into its own dock tray tile —
+  // same `minimized` concept every real AppWindow session already has (see
+  // Session/sessions below), just tracked separately since chat never gets
+  // a `sessions` entry (handleDockSelect below special-cases it instead of
+  // opening a real AppWindow). `open` stays true the whole time this is
+  // true — ChatAssistant treats minimized as "running, tucked away", not
+  // closed, so the conversation survives it the same way it already
+  // survives a full close/reopen.
+  const [chatMinimized, setChatMinimized] = useState(false);
   const confirmSignOut = useCallback(() => {
     clearAuthUser();
     setAuthUser(null);
@@ -188,6 +197,10 @@ export default function App() {
     if (id === 'chat') {
       setChatOriginRect(rect);
       setChatOpen(true);
+      // Restores it if it was minimized — same "clicking the dock icon
+      // again un-minimizes" behavior handleDockSelect gives every real
+      // AppWindow session below.
+      setChatMinimized(false);
       return;
     }
     setSessions((prev) => {
@@ -272,7 +285,15 @@ export default function App() {
   }, []);
 
   const runningAppIds = Object.keys(sessions);
-  const minimizedAppIds = runningAppIds.filter((id) => sessions[id].minimized);
+  const minimizedAppIds = [
+    ...runningAppIds.filter((id) => sessions[id].minimized),
+    // Chat isn't a `sessions` entry (see handleDockSelect above), so it
+    // needs its own explicit slot here — everything downstream (MacDock's
+    // tray row, handleTrayRectChange/trayRects below) is already generic
+    // over app id and needs no further special-casing once it's in this
+    // list.
+    ...(chatOpen && chatMinimized ? ['chat'] : []),
+  ];
 
   return (
     // Wraps everything — both MacDock (the Spotify icon's hover popup) and
@@ -366,7 +387,15 @@ export default function App() {
           sceneCanvasRef={sceneCanvasRef}
           isLight={isLight}
         />
-        <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} originRect={chatOriginRect} />
+        <ChatAssistant
+          open={chatOpen}
+          onClose={() => { setChatOpen(false); setChatMinimized(false); }}
+          originRect={chatOriginRect}
+          minimized={chatMinimized}
+          trayRect={trayRects['chat'] ?? null}
+          onMinimize={() => setChatMinimized(true)}
+          onRestore={() => setChatMinimized(false)}
+        />
 
         {/* Dimmed + frozen while editing widgets — same "everything else
             fades into the background" behavior as real macOS/iOS widget

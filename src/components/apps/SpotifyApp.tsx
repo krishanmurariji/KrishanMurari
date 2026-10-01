@@ -3,8 +3,9 @@
 // client-side call to YouTube Data API v3 — needs an API key, see
 // .env.example) and play results through the official YouTube IFrame
 // Player (see src/lib/youtube-player.tsx). Styled to read as a genuine
-// Spotify clone: near-black chrome, the real soundwave logomark, a splash
-// screen on open, card-hover play buttons, and a vertical results list
+// Spotify clone: light chrome (Spotify's own light-mode palette, per
+// request — was near-black), the real soundwave logomark, a splash screen
+// on open, card-hover play buttons, and a vertical results list
 // rather than the earlier glass-window look, so it reads as "Spotify" at a
 // glance rather than "another glass panel." That player is a single
 // app-wide instance (mounted once in App.tsx), so play/pause/skip here
@@ -45,9 +46,13 @@ function isTrackArray(value: unknown): value is YouTubeTrack[] {
 // the '#1DB954' brand green since it's the one Spotify itself uses on dark
 // UI chrome (buttons, the now-playing bar), which is exactly this context.
 const ACCENT = '#1ED760';
-const BG = '#0a0a0a';
-const CARD_BG = '#181818';
-const CARD_HOVER = '#282828';
+// Light chrome per request (was near-black — '#0a0a0a'/'#181818'/'#282828')
+// — same role each color plays, just Spotify's light-mode palette instead
+// of its dark one: white window background, light-gray cards, a slightly
+// darker gray for their hover state.
+const BG = '#ffffff';
+const CARD_BG = '#f0f0f0';
+const CARD_HOVER = '#e3e3e3';
 
 // Spotify's actual soundwave-arc logomark path (also used by the dock's own
 // SpotifyIcon in MacIcons.tsx) — reused here for the splash screen rather
@@ -156,7 +161,7 @@ function formatTime(seconds: number): string {
 }
 
 // A recently-played card, styled after Spotify's own home-grid tiles: flat
-// dark card, square artwork, and a green circular play button that only
+// light card, square artwork, and a green circular play button that only
 // appears (raised, faded in) on hover — rather than always-visible chrome.
 function RecentCard({
   track,
@@ -189,8 +194,8 @@ function RecentCard({
         )}
       </div>
       <div className="min-w-0">
-        <div className="truncate text-sm font-semibold text-white">{track.title}</div>
-        <div className="truncate text-xs text-white/60">{track.channelTitle}</div>
+        <div className="truncate text-sm font-semibold text-black">{track.title}</div>
+        <div className="truncate text-xs text-black/60">{track.channelTitle}</div>
       </div>
     </button>
   );
@@ -220,7 +225,7 @@ function ResultsList({
             key={track.id}
             type="button"
             onClick={() => onSelect(track, i)}
-            className="group flex items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-white/10"
+            className="group flex items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-black/5"
           >
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded">
               <img src={track.thumbnail} alt="" className="h-full w-full object-cover" draggable={false} />
@@ -239,12 +244,12 @@ function ResultsList({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium" style={{ color: isCurrent ? ACCENT : '#fff' }}>
+              <div className="truncate text-sm font-medium" style={{ color: isCurrent ? ACCENT : '#000' }}>
                 {track.title}
               </div>
-              <div className="truncate text-xs text-white/50">{track.channelTitle}</div>
+              <div className="truncate text-xs text-black/50">{track.channelTitle}</div>
             </div>
-            <PlayIcon className="h-3.5 w-3.5 shrink-0 text-white/0 transition-colors group-hover:text-white/70" />
+            <PlayIcon className="h-3.5 w-3.5 shrink-0 text-black/0 transition-colors group-hover:text-black/70" />
           </button>
         );
       })}
@@ -323,26 +328,27 @@ export default function SpotifyApp() {
   const progress = player.duration > 0 ? (player.currentTime / player.duration) * 100 : 0;
 
   return (
-    <div ref={containerRef} className="relative flex h-full w-full flex-col overflow-hidden text-white" style={{ background: BG }}>
+    <div ref={containerRef} className="relative flex h-full w-full flex-col overflow-hidden text-black" style={{ background: BG }}>
       <style>{'@keyframes eq { 0%, 100% { height: 30%; } 50% { height: 100%; } }'}</style>
 
       {/* Background — a real (memoized-by-default-options, so this never
           recreates the WebGL scene on re-render) three.js highway of
-          streaking car lights, behind everything else. A dark scrim sits
+          streaking car lights, behind everything else. A light scrim (was
+          dark, to fade into the window's old near-black background) sits
           between it and the real content so the search field, track list
           and transport controls all stay legible over the busier bits of
           the animation rather than just laid bare on top of it. */}
       <div className="absolute inset-0 z-0">
         <Hyperspeed />
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,10,10,0.55), rgba(10,10,10,0.8) 60%, rgba(10,10,10,0.92))' }} />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.8) 60%, rgba(255,255,255,0.92))' }} />
       </div>
 
       <AnimatePresence>{showSplash && <SpotifySplash />}</AnimatePresence>
 
       {/* Header — a top scroll-free bar with the search pill, styled after
-          Spotify's own light search field (the one high-contrast element
-          against all the near-black chrome around it) rather than the
-          previous small centered glass pill. */}
+          Spotify's own light-mode search field, set off from the window's
+          own now-white background with a light-gray fill rather than a
+          border. */}
       <div className="relative z-10 flex shrink-0 items-center gap-3 px-5 pb-3 pt-4">
         <SoundwaveGlyph className="h-6 w-6 shrink-0" style={{ color: ACCENT }} />
         <form onSubmit={handleSearch} className="relative flex-1">
@@ -352,7 +358,8 @@ export default function SpotifyApp() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="What do you want to play?"
-            className="w-full rounded-full bg-white py-2.5 pl-10 pr-4 text-sm text-black outline-none placeholder:text-black/50"
+            className="w-full rounded-full py-2.5 pl-10 pr-4 text-sm text-black outline-none placeholder:text-black/50"
+            style={{ background: CARD_BG }}
           />
         </form>
       </div>
@@ -361,8 +368,8 @@ export default function SpotifyApp() {
           list once a search has run. */}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {status === 'searching' && (
-          <div className="flex h-full items-center justify-center gap-2 text-sm text-white/60">
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/25 border-t-white/70" aria-hidden />
+          <div className="flex h-full items-center justify-center gap-2 text-sm text-black/60">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/25 border-t-black/70" aria-hidden />
             Searching&hellip;
           </div>
         )}
@@ -370,7 +377,7 @@ export default function SpotifyApp() {
         {status === 'idle' && results.length === 0 && (
           recentTracks.length > 0 ? (
             <div className="flex h-full flex-col gap-3 overflow-y-auto px-5 pb-4 pt-1" data-lenis-prevent>
-              <div className="text-lg font-bold text-white">Recently played</div>
+              <div className="text-lg font-bold text-black">Recently played</div>
               <div className="grid grid-cols-3 gap-3">
                 {recentTracks.map((track, index) => (
                   <RecentCard
@@ -383,7 +390,7 @@ export default function SpotifyApp() {
               </div>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/50">Search for a song to get started.</div>
+            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-black/50">Search for a song to get started.</div>
           )
         )}
         {results.length > 0 && (
@@ -399,47 +406,49 @@ export default function SpotifyApp() {
       {/* Now-playing bar — Spotify's real 3-column layout: track info on
           the left, transport + progress centered, mute on the right (no
           numeric volume level to show — the player only exposes a mute
-          toggle). Central play/pause is a white filled circle with a black
-          glyph, matching Spotify's own transport button, distinct from the
-          green play buttons used on cards. */}
+          toggle). Central play/pause is a black filled circle with a white
+          glyph (was the inverse — white circle, black glyph — to stand out
+          against the old dark bar; black is what stands out against this
+          now-light one), distinct from the green play buttons used on
+          cards. */}
       {player.current && (
         <div
-          className="relative z-10 grid shrink-0 grid-cols-3 items-center gap-3 border-t border-white/10 px-4 py-3"
-          style={{ background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+          className="relative z-10 grid shrink-0 grid-cols-3 items-center gap-3 border-t border-black/10 px-4 py-3"
+          style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
         >
           <div className="flex min-w-0 items-center gap-3">
             <img src={player.current.thumbnail} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-white">{player.current.title}</div>
-              <div className="truncate text-xs text-white/50">{player.current.channelTitle}</div>
+              <div className="truncate text-sm font-medium text-black">{player.current.title}</div>
+              <div className="truncate text-xs text-black/50">{player.current.channelTitle}</div>
             </div>
           </div>
 
           <div className="flex flex-col items-center gap-1.5">
             <div className="flex items-center gap-4">
-              <button type="button" aria-label="Previous" onClick={player.skipPrev} className="text-white/70 transition hover:text-white">
+              <button type="button" aria-label="Previous" onClick={player.skipPrev} className="text-black/70 transition hover:text-black">
                 <PrevIcon className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 aria-label={player.playing ? 'Pause' : 'Play'}
                 onClick={player.togglePlay}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black transition hover:scale-105"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition hover:scale-105"
               >
                 {player.loading ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 ) : player.playing ? (
                   <PauseIcon className="h-4 w-4" />
                 ) : (
                   <PlayIcon className="ml-0.5 h-4 w-4" />
                 )}
               </button>
-              <button type="button" aria-label="Next" onClick={player.skipNext} className="text-white/70 transition hover:text-white">
+              <button type="button" aria-label="Next" onClick={player.skipNext} className="text-black/70 transition hover:text-black">
                 <NextIcon className="h-4 w-4" />
               </button>
             </div>
             <div className="flex w-full max-w-xs items-center gap-2">
-              <span className="w-8 text-right text-[10px] tabular-nums text-white/40">{formatTime(player.currentTime)}</span>
+              <span className="w-8 text-right text-[10px] tabular-nums text-black/40">{formatTime(player.currentTime)}</span>
               <input
                 type="range"
                 min={0}
@@ -448,15 +457,15 @@ export default function SpotifyApp() {
                 onChange={(e) => {
                   if (player.duration > 0) player.seek((Number(e.target.value) / 100) * player.duration);
                 }}
-                className="h-1 flex-1 cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
-                style={{ background: `linear-gradient(to right, ${ACCENT} ${progress}%, rgba(255,255,255,0.2) ${progress}%)` }}
+                className="h-1 flex-1 cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-black"
+                style={{ background: `linear-gradient(to right, ${ACCENT} ${progress}%, rgba(0,0,0,0.15) ${progress}%)` }}
               />
-              <span className="w-8 text-[10px] tabular-nums text-white/40">{formatTime(player.duration)}</span>
+              <span className="w-8 text-[10px] tabular-nums text-black/40">{formatTime(player.duration)}</span>
             </div>
           </div>
 
           <div className="flex items-center justify-end">
-            <button type="button" aria-label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} className="text-white/70 transition hover:text-white">
+            <button type="button" aria-label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} className="text-black/70 transition hover:text-black">
               {muted ? <MuteIcon className="h-4 w-4" /> : <VolumeIcon className="h-4 w-4" />}
             </button>
           </div>

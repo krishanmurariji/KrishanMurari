@@ -14,7 +14,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import nodemailer from 'nodemailer';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Excludes `,`/`;` on top of whitespace/`@` — without them, a value like
+// `x,attacker@evil.com` has exactly one `@` and no whitespace, so it passed
+// this check, and nodemailer's address parser then reads the comma as an
+// RFC 5322 mailbox-list separator: the auto-reply below (`to: email`) ends
+// up also sent to `attacker@evil.com`, an address the visitor never
+// actually owns.
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 
 interface ContactFields {
   email: string;

@@ -9,7 +9,11 @@
 import nodemailer from 'nodemailer';
 import { buildAckEmailHtml, buildNotificationEmailHtml } from './ackEmailTemplate';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Excludes `,`/`;` on top of whitespace/`@` — see api/contact.ts's identical
+// copy of this regex for the full reasoning (a comma smuggled through here
+// becomes an extra recipient once nodemailer parses the `to`/`replyTo`
+// address below).
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 
 export interface ContactFields {
   email: string;

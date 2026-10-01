@@ -32,7 +32,10 @@ const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 // smaller/simpler loop than either of those, so it gets a shorter hold.
 const INTRO_MS = 1500;
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Matches the server's own copy (api/contact.ts) char-for-char — this one's
+// a UX nicety only, not the real gate, but it should never accept something
+// the server would then reject (or, worse, silently mishandle).
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const SUBJECT_MIN = 3;
 const SUBJECT_MAX = 150;
 const MESSAGE_MIN = 10;

@@ -212,7 +212,11 @@ function SceneContents({
 
   return (
     <>
-      <fog attach="fog" color={isLight ? '#f3f4f6' : '#050510'} near={14} far={32} />
+      {/* Constructor args (color, near, far) rather than separate props —
+          r3f's own typed intrinsics expect `<fog>`'s args tuple to be
+          supplied this way; works identically at runtime either way, this
+          is just the idiomatic form. */}
+      <fog attach="fog" args={[isLight ? '#f3f4f6' : '#050510', 14, 32]} />
       <LocalEnvironment />
       <ambientLight intensity={isLight ? 1.5 : 0.5} />
       <directionalLight position={[10, 10, 10]} intensity={isLight ? 2 : 1} castShadow />

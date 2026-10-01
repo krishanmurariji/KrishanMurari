@@ -103,6 +103,10 @@ interface ModelNodes {
 }
 
 function useRobotModel(): ModelNodes {
+  // useLoader suspends until MODEL_URL has actually loaded — by the time any
+  // code below here runs, `collada` is never really null; the `!` sites
+  // below just reflect that to the type checker, the same way this file
+  // already trusts `getObjectByName` results a few lines down (`!`).
   const collada = useLoader(ColladaLoader, MODEL_URL);
   const [faceTexture, bodyTexture] = useLoader(THREE.TextureLoader, [FACE_TEXTURE_URL, BODY_TEXTURE_URL]);
 
@@ -116,12 +120,12 @@ function useRobotModel(): ModelNodes {
     faceTexture.colorSpace = THREE.SRGBColorSpace;
     bodyTexture.minFilter = THREE.LinearFilter;
     bodyTexture.colorSpace = THREE.SRGBColorSpace;
-    const lens = collada.scene.getObjectByName('Lens') as THREE.Mesh | undefined;
+    const lens = collada!.scene.getObjectByName('Lens') as THREE.Mesh | undefined;
     if (lens && lens.material) {
       (lens.material as THREE.MeshStandardMaterial).map = faceTexture;
       (lens.material as THREE.MeshStandardMaterial).needsUpdate = true;
     }
-    const body = collada.scene.getObjectByName('Body') as THREE.Mesh | undefined;
+    const body = collada!.scene.getObjectByName('Body') as THREE.Mesh | undefined;
     const bodyChild = body?.children[0] as THREE.Mesh | undefined;
     if (bodyChild && bodyChild.material) {
       (bodyChild.material as THREE.MeshStandardMaterial).map = bodyTexture;
@@ -136,7 +140,7 @@ function useRobotModel(): ModelNodes {
   // textures underneath — same pattern as the original's single instance,
   // just repeated safely.
   return useMemo(() => {
-    const root = collada.scene.clone(true);
+    const root = collada!.scene.clone(true);
     root.rotation.y = THREE.MathUtils.degToRad(-90); // "Rotate robot in front direction" — the original's own comment.
 
     const eye = root.getObjectByName('Eye')!;

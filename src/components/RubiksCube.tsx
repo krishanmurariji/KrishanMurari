@@ -113,7 +113,9 @@ export default function RubiksCube({
   progressRef,
   assembled,
 }: {
-  groupRef: React.RefObject<THREE.Group>;
+  // `| null` matches what `useRef<THREE.Group>(null)` actually produces —
+  // the ref genuinely starts out null before the <group> below mounts.
+  groupRef: React.RefObject<THREE.Group | null>;
   /** 0..1 assembly progress, driven externally by the loader. Omit to render fully assembled. */
   progressRef?: React.MutableRefObject<{ value: number }>;
   /** Once true, the per-piece assembly loop stops and the post-assembly reveal

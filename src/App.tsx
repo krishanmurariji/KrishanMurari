@@ -9,6 +9,7 @@ import MacDock, { type DockApp, type DockRect } from './components/MacDock';
 import AppWindow, { useSharedSnapshots } from './components/AppWindow';
 import Scene from './components/Scene';
 import SceneErrorBoundary from './components/SceneErrorBoundary';
+import AppErrorBoundary from './components/AppErrorBoundary';
 import MenuBar from './components/MenuBar';
 import DesktopWidgets from './components/DesktopWidgets';
 import ChatAssistant from './components/ChatAssistant';
@@ -337,6 +338,15 @@ export default function App() {
         onConfirm={confirmSignOut}
       />
 
+      {/* Everything below is the actual desktop — menu bar, dock, widgets,
+          every app window, the 3D scene. Wrapped in a real error boundary
+          (not SceneErrorBoundary below, which only covers <Scene> itself)
+          so a crash anywhere in here drops to a visible "something went
+          wrong" message instead of unmounting the whole app to a blank
+          page — the Loader/LockScreen above stay outside it on purpose, so
+          a desktop-side crash can't also take out the lock screen's own
+          ability to show its own error state. */}
+      <AppErrorBoundary>
       {/* Background — cloudy white */}
       <div
         className="fixed inset-0 w-full h-full -z-20 transition-colors duration-700"
@@ -460,6 +470,7 @@ export default function App() {
           <Scene isLight={isLight} isLoading={isLoading} locked={sceneLocked} progressRef={loadProgressRef} canvasRef={sceneCanvasRef} />
         </SceneErrorBoundary>
       </main>
+      </AppErrorBoundary>
     </SmoothScroll>
     </YouTubePlayerProvider>
   );

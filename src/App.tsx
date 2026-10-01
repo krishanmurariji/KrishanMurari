@@ -8,6 +8,7 @@ import NotificationBanner, { type NotificationData } from './components/Notifica
 import MacDock, { type DockApp, type DockRect } from './components/MacDock';
 import AppWindow, { useSharedSnapshots } from './components/AppWindow';
 import Scene from './components/Scene';
+import SceneErrorBoundary from './components/SceneErrorBoundary';
 import MenuBar from './components/MenuBar';
 import DesktopWidgets from './components/DesktopWidgets';
 import ChatAssistant from './components/ChatAssistant';
@@ -455,7 +456,9 @@ export default function App() {
         {/* 3D Canvas — fixed behind everything. The revealed name now renders
             as real 3D glass text inside this same scene (see Scene.tsx),
             not an HTML overlay, so it can actually refract/reflect. */}
-        <Scene isLight={isLight} isLoading={isLoading} locked={sceneLocked} progressRef={loadProgressRef} canvasRef={sceneCanvasRef} />
+        <SceneErrorBoundary>
+          <Scene isLight={isLight} isLoading={isLoading} locked={sceneLocked} progressRef={loadProgressRef} canvasRef={sceneCanvasRef} />
+        </SceneErrorBoundary>
       </main>
     </SmoothScroll>
     </YouTubePlayerProvider>

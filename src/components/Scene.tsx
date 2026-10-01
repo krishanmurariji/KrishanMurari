@@ -1,11 +1,39 @@
-import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
-import { Environment, PresentationControls, ContactShadows, RoundedBox } from '@react-three/drei';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { PresentationControls, ContactShadows, RoundedBox } from '@react-three/drei';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Suspense, useRef, useLayoutEffect, useMemo, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import RubiksCube from './RubiksCube';
 import GlassLogo3D from './GlassLogo3D';
 import gsap from 'gsap';
 import { usePrefersReducedMotion } from '../lib/useReducedMotion';
+
+// Procedurally built (three.js's own bundled RoomEnvironment — a handful of
+// boxes/lights, PMREM-baked into a reflection map) rather than drei's
+// `<Environment preset="city"/">`, which fetches an actual HDR file
+// (potsdamer_platz_1k.hdr for "city") from an external CDN
+// (market-assets.fra1.cdn.digitaloceanspaces.com) at runtime, in every
+// visitor's browser. That fetch failing — a CDN blip, a corporate firewall,
+// an ad/tracker blocker, a flaky mobile connection — threw an uncaught
+// error with no boundary anywhere above this to catch it, which React
+// handled by unmounting the *entire* app (dock, menu bar, every open app,
+// not just the 3D layer), reading as "the whole site crashed a few minutes
+// in." This has zero network dependency, so it can't fail that way at all.
+function LocalEnvironment() {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  useEffect(() => {
+    const pmremGenerator = new THREE.PMREMGenerator(gl);
+    const target = pmremGenerator.fromScene(new RoomEnvironment(), 0.04);
+    scene.environment = target.texture;
+    return () => {
+      scene.environment = null;
+      target.dispose();
+      pmremGenerator.dispose();
+    };
+  }, [gl, scene]);
+  return null;
+}
 
 interface ScatterPiece {
   baseX: number;
@@ -185,7 +213,7 @@ function SceneContents({
   return (
     <>
       <fog attach="fog" color={isLight ? '#f3f4f6' : '#050510'} near={14} far={32} />
-      <Environment preset={isLight ? 'warehouse' : 'city'} />
+      <LocalEnvironment />
       <ambientLight intensity={isLight ? 1.5 : 0.5} />
       <directionalLight position={[10, 10, 10]} intensity={isLight ? 2 : 1} castShadow />
       <ScatteredCubes reducedMotion={reducedMotion} />

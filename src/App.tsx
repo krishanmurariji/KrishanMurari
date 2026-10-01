@@ -133,17 +133,28 @@ export default function App() {
   const [volume, setVolumeState] = useState(() => loadNumber('volume', 70));
   const setVolume = useCallback((v: number) => { setVolumeState(v); saveNumber('volume', v); }, []);
   const howlRef = useRef<Howl | null>(null);
+  // Mirrors `volume`, read inside togglePlay's own stable (empty-deps)
+  // callback — constructing the Howl there needs whatever volume is
+  // current *at that moment*, not whatever it was when togglePlay was first
+  // created.
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
   const [playing, setPlaying] = useState(false);
-  useEffect(() => {
-    const howl = new Howl({ src: [TRACK_SRC], loop: true, volume: volume / 100 });
-    howlRef.current = howl;
-    return () => { howl.unload(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Cleans up the Howl on unmount regardless of whether one was ever
+  // created (togglePlay below is what actually creates it, lazily).
+  useEffect(() => () => { howlRef.current?.unload(); }, []);
   useEffect(() => { howlRef.current?.volume(volume / 100); }, [volume]);
   const togglePlay = useCallback(() => {
+    // Constructed here, on first actual play, rather than eagerly on
+    // mount — this is a 6.69MB track; Howler's default behavior fetches
+    // and fully decodes the whole file the instant a Howl exists, so
+    // building it only once a visitor actually presses play means that
+    // download never happens at all for the (likely large majority of)
+    // visitors who don't.
+    if (!howlRef.current) {
+      howlRef.current = new Howl({ src: [TRACK_SRC], loop: true, volume: volumeRef.current / 100 });
+    }
     const howl = howlRef.current;
-    if (!howl) return;
     setPlaying((p) => {
       if (p) howl.pause();
       else howl.play();

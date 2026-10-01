@@ -52,7 +52,12 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Merriweather:wght@300;400&family=Open+Sans:wght@600;700&family=Yatra+One&display=swap" rel="stylesheet" />
+    <!-- Only the two families --font-sans (src/index.css) actually uses.
+         Previously also loaded Pacifico, Merriweather, Open Sans, and Yatra
+         One — none referenced anywhere in the live app (Pacifico's only
+         user, Hero.tsx, isn't imported by anything) — pure wasted weight on
+         a render-blocking request every visitor paid for. -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
     <!-- Structured data (schema.org Person) — this is what lets Google
          show a knowledge-panel-style result (photo, job title, social

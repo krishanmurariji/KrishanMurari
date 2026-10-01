@@ -10,6 +10,7 @@ import AppWindow, { useSharedSnapshots } from './components/AppWindow';
 import Scene from './components/Scene';
 import SceneErrorBoundary from './components/SceneErrorBoundary';
 import AppErrorBoundary from './components/AppErrorBoundary';
+import SeoContent from './components/SeoContent';
 import MenuBar from './components/MenuBar';
 import DesktopWidgets from './components/DesktopWidgets';
 import ChatAssistant from './components/ChatAssistant';
@@ -303,6 +304,12 @@ export default function App() {
     // open) read this same app-wide YouTube playback state, so it needs to
     // be a shared ancestor of both rather than owned by either.
     <YouTubePlayerProvider>
+    {/* Unconditional, outside every loading/lock-screen/error-boundary gate
+        and outside SmoothScroll's own scroll wrapper — a screen reader or a
+        search crawler should see this on the very first render no matter
+        what state the rest of the desktop is in. See SeoContent's own
+        comment for why it needs to exist at all. */}
+    <SeoContent />
     <SmoothScroll>
       <AnimatePresence mode="wait">
         {isLoading && (

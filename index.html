@@ -109,6 +109,27 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Only rendered with scripting disabled — per the HTML spec, no
+         browser with JS enabled ever shows this, so it costs nothing for
+         the real (JS-driven desktop) experience. It exists for crawlers
+         that don't execute JS at all (not every bot does, even though
+         Googlebot generally does), matching the same facts SeoContent.tsx
+         puts in the DOM for JS-enabled visits — see that file's own
+         comment for the fuller reasoning on why this site needs either. -->
+    <noscript>
+      <h1>Krishan Murari — Full Stack Developer &amp; Software Engineer</h1>
+      <p>
+        Krishan Murari is a Full Stack Developer based in Mohali, Punjab, India, building scalable web applications
+        with C#, ASP.NET Core, Angular, and TypeScript — HRMS, telehealth, and SaaS platforms with AI integrations
+        like OpenAI's GPT-4o, Whisper, and the Model Context Protocol.
+      </p>
+      <p>
+        Email <a href="mailto:murari@krishan.is-a.dev">murari@krishan.is-a.dev</a>, or find him on
+        <a href="https://github.com/krishanmurariji">GitHub</a>,
+        <a href="https://www.linkedin.com/in/krishan-murari/">LinkedIn</a>, and
+        <a href="https://twitter.com/KrishanMuraari">Twitter / X</a>.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

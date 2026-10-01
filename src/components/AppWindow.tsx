@@ -185,12 +185,18 @@ export function WindowChrome({
             className="w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition"
             style={{ background: '#ff5f57', cursor: interactive ? 'pointer' : 'default' }}
           />
+          {/* Hidden below sm (640px), matching ChatAssistant's own yellow
+              button — red/green stay. Was visible at every size here while
+              chat alone hid it, an inconsistency between the two "same
+              button, same minimize-to-tray behavior" title bars; this
+              brings every app window in line with chat's existing choice
+              rather than the other way around. */}
           <button
             type="button"
             aria-label="Minimize"
             disabled={!interactive}
             onClick={onMinimize}
-            className="w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition"
+            className="hidden w-3.5 h-3.5 rounded-full border-none hover:brightness-90 transition sm:block"
             style={{ background: '#febc2e', cursor: interactive ? 'pointer' : 'default' }}
           />
           <button

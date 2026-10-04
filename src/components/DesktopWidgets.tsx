@@ -436,7 +436,7 @@ export function GlassMusicCard({
 
         {/* The sharp original, inset so the blurred bleed reads as a
             frame around it. */}
-        <div className="absolute inset-2.5 overflow-hidden rounded-lg shadow-lg">
+        <div className="absolute inset-2.5 overflow-hidden rounded-lg shadow-lg" style={{ borderRadius: 26 }}>
           {thumbnail ? (
             <img src={thumbnail} alt="" className="h-full w-full object-cover" />
           ) : (

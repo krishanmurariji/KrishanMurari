@@ -22,7 +22,15 @@ import { usePrefersReducedMotion } from '../lib/useReducedMotion';
 function LocalEnvironment() {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
-  useEffect(() => {
+  // useLayoutEffect, not useEffect — the cube's material (metalness +
+  // clearcoat + transmission) renders essentially black with no
+  // scene.environment to reflect, so a passive effect here (deferred until
+  // after the browser's next paint) let the very first frame(s) of the
+  // loading animation render the cube black before this set it, a visible
+  // black-then-white flash right as the page loads. A layout effect runs
+  // synchronously during commit, before that first paint, so the
+  // environment is already in place by the time anything is drawn.
+  useLayoutEffect(() => {
     const pmremGenerator = new THREE.PMREMGenerator(gl);
     const target = pmremGenerator.fromScene(new RoomEnvironment(), 0.04);
     scene.environment = target.texture;

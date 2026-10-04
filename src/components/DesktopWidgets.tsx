@@ -116,6 +116,16 @@ const STACK_SIZE = SQUARE * 2 + GAP; // the whole 2x2 grid's total footprint
 const PHOTO_WIDTH = STACK_SIZE;
 const PHOTO_HEIGHT = STACK_SIZE;
 
+// The Clock/Calendar/Weather/Music stack shrinks much further on mobile —
+// down to roughly a single dock icon's own footprint per cell (MacDock's
+// BASE_SIZE is 48px, unscaled across breakpoints) — per explicit request
+// that every widget except Photo read as icon-sized on small screens. Fixed
+// rather than viewport-responsive like MOBILE_SCALE: at this size the
+// stack's whole footprint is small enough to always sit beside Photo
+// without needing a narrower fallback scale the way Photo still does.
+const STACK_ICON_SIZE = 48;
+const STACK_MOBILE_SCALE = STACK_ICON_SIZE / SQUARE;
+
 const WIDGET_SHADOW = '0 10px 30px rgba(0,0,0,0.18)';
 
 // The exact frosted-glass material ControlCenterPanel.tsx uses in dark mode
@@ -1066,21 +1076,24 @@ export default function DesktopWidgets({
     transition: { duration: 1, delay: 0.6, ease: [0.16, 1, 0.3, 1] as const },
   };
 
-  // Two screen-anchored corners: the 2x2 stack top-left, Photo top-right at
-  // the same size — same on mobile, just shrunk via a plain transform
-  // instead of resizing individually. That side-by-side layout only
-  // actually fits down to a certain width, though (both groups are the same
-  // STACK_SIZE-wide square) — below it, stack the two groups vertically
-  // instead of letting their `left-4`/`right-4` corners overlap each other,
-  // using whatever scale actually fits this viewport's width rather than
-  // the fixed MOBILE_SCALE (which was tuned for the side-by-side case).
+  // Two screen-anchored corners: the 2x2 stack top-left, Photo top-right.
+  // On mobile the stack shrinks to icon size (STACK_MOBILE_SCALE, fixed —
+  // see that constant's own comment) while Photo keeps its previous
+  // mobile-scale behavior unchanged, per explicit request that only the
+  // Clock/Calendar/Weather/Music stack — not Photo — minimize down to icon
+  // size on small screens. The icon-sized stack's own footprint is small
+  // enough that side-by-side almost always fits; the vertical-stacking
+  // fallback below still exists purely for Photo's own width against a
+  // genuinely narrow viewport, the same case it already handled.
   if (isMobile) {
     const edgeMargin = 16;
     const midGap = 12;
-    const sideBySideMinWidth = STACK_SIZE * MOBILE_SCALE * 2 + edgeMargin * 2 + midGap;
+    const stackWidth = STACK_SIZE * STACK_MOBILE_SCALE;
+    const stackHeight = STACK_SIZE * STACK_MOBILE_SCALE;
+    const sideBySideMinWidth = stackWidth + PHOTO_WIDTH * MOBILE_SCALE + edgeMargin * 2 + midGap;
     const stackVertically = viewportWidth < sideBySideMinWidth;
-    const mobileScale = stackVertically
-      ? Math.min(MOBILE_SCALE, Math.max(0.45, (viewportWidth - edgeMargin * 2) / STACK_SIZE))
+    const photoScale = stackVertically
+      ? Math.min(MOBILE_SCALE, Math.max(0.45, (viewportWidth - edgeMargin * 2) / PHOTO_WIDTH))
       : MOBILE_SCALE;
 
     return (
@@ -1093,7 +1106,7 @@ export default function DesktopWidgets({
           <motion.div
             {...entrance}
             className="fixed left-4 z-30"
-            style={{ top: 48, pointerEvents: 'none', transform: `scale(${mobileScale})`, transformOrigin: 'top left' }}
+            style={{ top: 48, pointerEvents: 'none', transform: `scale(${STACK_MOBILE_SCALE})`, transformOrigin: 'top left' }}
           >
             {stack}
           </motion.div>
@@ -1103,9 +1116,9 @@ export default function DesktopWidgets({
             {...entrance}
             className={cn('fixed z-30', stackVertically ? 'left-4' : 'right-4')}
             style={{
-              top: stackVertically ? 48 + STACK_SIZE * mobileScale + midGap : 48,
+              top: stackVertically ? 48 + stackHeight + midGap : 48,
               pointerEvents: 'none',
-              transform: `scale(${mobileScale})`,
+              transform: `scale(${photoScale})`,
               transformOrigin: stackVertically ? 'top left' : 'top right',
             }}
           >

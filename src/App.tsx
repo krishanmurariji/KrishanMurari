@@ -424,6 +424,7 @@ export default function App() {
           trayRect={trayRects['chat'] ?? null}
           onMinimize={() => setChatMinimized(true)}
           onRestore={() => setChatMinimized(false)}
+          isLight={isLight}
         />
 
         {/* Dimmed + frozen while editing widgets — same "everything else
@@ -469,6 +470,7 @@ export default function App() {
             onRestore={() => handleRestore(id)}
             onCloseComplete={() => handleCloseComplete(id)}
             onAnimatingChange={(animating) => handleAnimatingChange(id, animating)}
+            isLight={isLight}
           />
         );
       })}

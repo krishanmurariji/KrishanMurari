@@ -26,7 +26,11 @@ const CONTRIB_GRAPH_URL = `https://ghchart.rshah.org/${GITHUB_HANDLE}`;
 
 const INTRO_MS = 3000;
 
-const TILE_CLASS = 'overflow-hidden rounded-2xl bg-white/85 shadow-sm ring-1 ring-black/5 backdrop-blur-md';
+function tileClass(isLight: boolean) {
+  return `overflow-hidden rounded-2xl shadow-sm backdrop-blur-md ${
+    isLight ? 'bg-white/85 ring-1 ring-black/5' : 'bg-white/[0.06] ring-1 ring-white/10'
+  }`;
+}
 
 // A handful of real technologies have no logo left in the simple-icons set
 // at all — Microsoft pulled every one of its own marks (Visual Studio,
@@ -179,8 +183,8 @@ const TOOLS_ICONS: IconItem[] = [
   img('postman', 'Postman'),
 ];
 
-function CardHeading({ children }: { children: ReactNode }) {
-  return <div className="text-sm font-semibold text-[#1c1c1e] sm:text-base">{children}</div>;
+function CardHeading({ children, isLight }: { children: ReactNode; isLight: boolean }) {
+  return <div className={`text-sm font-semibold sm:text-base ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}>{children}</div>;
 }
 
 // Content-sized, not stretched to match its neighbors — a 6-icon card and a
@@ -189,16 +193,16 @@ function CardHeading({ children }: { children: ReactNode }) {
 // carries its name underneath, not just a bare logo. The card itself
 // staggers in (delayed by its position in the grid) and lifts on hover;
 // each icon also nudges up and scales slightly on its own hover.
-function IconGridTile({ heading, items, index }: { heading: string; items: IconItem[]; index: number }) {
+function IconGridTile({ heading, items, index, isLight }: { heading: string; items: IconItem[]; index: number; isLight: boolean }) {
   return (
     <motion.div
-      className={`${TILE_CLASS} flex flex-col gap-3 p-4 sm:p-5`}
+      className={`${tileClass(isLight)} flex flex-col gap-3 p-4 sm:p-5`}
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.15 + index * 0.08, ease: 'easeOut' }}
       whileHover={{ y: -4, boxShadow: '0 16px 28px -10px rgba(0,0,0,0.2)' }}
     >
-      <CardHeading>{heading}</CardHeading>
+      <CardHeading isLight={isLight}>{heading}</CardHeading>
       <div className="flex flex-wrap gap-3">
         {items.map((item, i) => (
           <motion.div
@@ -208,7 +212,7 @@ function IconGridTile({ heading, items, index }: { heading: string; items: IconI
             transition={{ type: 'spring', stiffness: 400, damping: 15 }}
           >
             {item.kind === 'img' ? <img src={item.src} alt={item.alt} className="h-8 w-8 object-contain" /> : item.node}
-            <span className="text-[10px] leading-tight text-black/60">{item.alt}</span>
+            <span className={`text-[10px] leading-tight ${isLight ? 'text-black/60' : 'text-white/60'}`}>{item.alt}</span>
           </motion.div>
         ))}
       </div>
@@ -221,10 +225,12 @@ function IconGridTile({ heading, items, index }: { heading: string; items: IconI
 // via DecryptedText once the grid is visible — no designation/location/
 // experience text, no logo above the photo, per explicit feedback dropping
 // both.
-function HeroTile() {
+function HeroTile({ isLight }: { isLight: boolean }) {
+  const nameColor = isLight ? '#3a3a3e' : '#f4f3f7';
+  const nameShine = isLight ? '#ffffff' : '#9a9aa5';
   return (
     <motion.div
-      className={`${TILE_CLASS} relative col-span-2 flex flex-col items-center @[900px]:col-span-3`}
+      className={`${tileClass(isLight)} relative col-span-2 flex flex-col items-center @[900px]:col-span-3`}
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
@@ -235,7 +241,7 @@ function HeroTile() {
           the aspect-ratio lock now lives on the image itself so it still
           fills whatever width the padding leaves it, edge-to-edge within
           its own frame. */}
-      <div className="w-full bg-[#f6f8fa] p-3 sm:p-4">
+      <div className={`w-full p-3 sm:p-4 ${isLight ? 'bg-[#f6f8fa]' : 'bg-black/30'}`}>
         <img
           src={CONTRIB_GRAPH_URL}
           alt={`${GITHUB_HANDLE}'s GitHub contribution calendar`}
@@ -256,24 +262,24 @@ function HeroTile() {
             rather than sitting on it. */}
         <div className="-mt-10 flex items-center justify-center gap-4 sm:-mt-16 sm:gap-8">
           <div className="flex flex-col items-center gap-2">
-            <ShinyText text="KRISHAN" color="#3a3a3e" shineColor="#ffffff" speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
-            <span className="h-px w-20 bg-gradient-to-r from-transparent via-black/25 to-transparent sm:w-32" />
+            <ShinyText text="KRISHAN" color={nameColor} shineColor={nameShine} speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
+            <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
           </div>
           <img
             src={AVATAR_URL}
             alt={NAME}
-            className="h-20 w-20 shrink-0 rounded-full object-cover shadow-md ring-4 ring-white sm:h-32 sm:w-32"
+            className={`h-20 w-20 shrink-0 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
           />
           <div className="flex flex-col items-center gap-2">
-            <ShinyText text="MURARI" color="#3a3a3e" shineColor="#ffffff" speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
-            <span className="h-px w-20 bg-gradient-to-r from-transparent via-black/25 to-transparent sm:w-32" />
+            <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
+            <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
           </div>
         </div>
         {/* No max-w cap — the previous max-w-xl held the paragraph to
             576px regardless of how wide the card actually was, leaving
             large empty gutters on either side once the card widened past
             that; it now spans the same width as the photo/banner above. */}
-        <p className="w-full text-justify text-base leading-relaxed text-black/75 sm:text-lg">
+        <p className={`w-full text-justify text-base leading-relaxed sm:text-lg ${isLight ? 'text-black/75' : 'text-white/80'}`}>
           <DecryptedText text={ABOUT_ME} animateOn="view" sequential revealDirection="start" speed={16} maxIterations={36} />
         </p>
       </div>
@@ -281,7 +287,7 @@ function HeroTile() {
   );
 }
 
-export default function BentoProfile() {
+export default function BentoProfile({ isLight = true }: { isLight?: boolean }) {
   const [showGrid, setShowGrid] = useState(false);
 
   useEffect(() => {
@@ -290,7 +296,7 @@ export default function BentoProfile() {
   }, []);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#f4f3f7]">
+    <div className={`relative h-full w-full overflow-hidden ${isLight ? 'bg-[#f4f3f7]' : 'bg-black'}`}>
       {/* The ripple runs continuously in both phases — it's the intro's
           whole content at first, then keeps animating quietly behind the
           grid once the grid's translucent cards fade in on top of it. */}
@@ -299,7 +305,7 @@ export default function BentoProfile() {
           gradient, so the ripple's currentColor is matched to that instead
           (see MenuBar.tsx's own "silvered, not purple" comment for the same
           logo-recolor history). */}
-      <div className="absolute inset-0 text-stone-400/70">
+      <div className={`absolute inset-0 ${isLight ? 'text-stone-400/70' : 'text-stone-500/40'}`}>
         <Ripple mainCircleSize={140} numCircles={7} />
       </div>
 
@@ -348,13 +354,13 @@ export default function BentoProfile() {
                 normal ~700px width, which would (and did) turn on the extra
                 column even at the ordinary window size. */}
             <div className="mx-auto grid max-w-6xl grid-cols-2 gap-5 @[900px]:grid-cols-3">
-              <HeroTile />
-              <IconGridTile heading="Languages" items={LANGUAGE_ICONS} index={0} />
-              <IconGridTile heading="Frameworks" items={FRAMEWORK_ICONS} index={1} />
-              <IconGridTile heading="AI Tools" items={AI_TOOL_ICONS} index={2} />
-              <IconGridTile heading="Databases" items={DATABASE_ICONS} index={3} />
-              <IconGridTile heading="Integrations" items={INTEGRATIONS_ICONS} index={4} />
-              <IconGridTile heading="Tools" items={TOOLS_ICONS} index={5} />
+              <HeroTile isLight={isLight} />
+              <IconGridTile heading="Languages" items={LANGUAGE_ICONS} index={0} isLight={isLight} />
+              <IconGridTile heading="Frameworks" items={FRAMEWORK_ICONS} index={1} isLight={isLight} />
+              <IconGridTile heading="AI Tools" items={AI_TOOL_ICONS} index={2} isLight={isLight} />
+              <IconGridTile heading="Databases" items={DATABASE_ICONS} index={3} isLight={isLight} />
+              <IconGridTile heading="Integrations" items={INTEGRATIONS_ICONS} index={4} isLight={isLight} />
+              <IconGridTile heading="Tools" items={TOOLS_ICONS} index={5} isLight={isLight} />
             </div>
           </motion.div>
         )}

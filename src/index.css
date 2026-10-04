@@ -201,13 +201,12 @@
 /* Neumorphic "soft UI" surfaces for the Email window's contact form (see
    EmailApp.tsx) — adapted from a pasted design that used shadcn/ui's
    CSS-variable tokens (bg-background, border-input, etc.), which this
-   project doesn't define; ported to a plain fixed light surface instead,
-   since dual light/dark neumorphic shadows would need two full shadow sets
-   and the Email window itself isn't theme-aware (see EmailApp.tsx's own
-   hardcoded white background, unchanged since before this). The raised
-   card and its inset fields share the same base color — only the shadow
-   direction (outset vs inset) tells them apart, which is what reads as
-   "soft UI" rather than a flat card with a border. */
+   project doesn't define; ported to a plain fixed light surface instead.
+   The raised card and its inset fields share the same base color — only the
+   shadow direction (outset vs inset) tells them apart, which is what reads
+   as "soft UI" rather than a flat card with a border. The `-dark` variants
+   below are the same effect on a dark base, switched to by EmailApp.tsx
+   per the site's global theme. */
 .neumorphic {
   background: #eef1f6;
   box-shadow: 9px 9px 18px rgba(163, 177, 198, 0.55), -9px -9px 18px rgba(255, 255, 255, 0.85);
@@ -215,6 +214,14 @@
 .neumorphic-inset {
   background: #eef1f6;
   box-shadow: inset 5px 5px 10px rgba(163, 177, 198, 0.45), inset -5px -5px 10px rgba(255, 255, 255, 0.85);
+}
+.neumorphic-dark {
+  background: #26262b;
+  box-shadow: 9px 9px 18px rgba(0, 0, 0, 0.55), -9px -9px 18px rgba(255, 255, 255, 0.04);
+}
+.neumorphic-inset-dark {
+  background: #26262b;
+  box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.5), inset -5px -5px 10px rgba(255, 255, 255, 0.03);
 }
 
 /* Animated send button (EmailApp.tsx's AnimatedSendButton) — adapted from a

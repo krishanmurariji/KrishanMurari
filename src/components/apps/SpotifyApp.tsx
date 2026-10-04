@@ -47,11 +47,15 @@ function isTrackArray(value: unknown): value is YouTubeTrack[] {
 // the '#1DB954' brand green since it's the one Spotify itself uses on dark
 // UI chrome (buttons, the now-playing bar), which is exactly this context.
 const ACCENT = '#1ED760';
-// Light chrome per request (was near-black — '#0a0a0a'/'#181818') — same
-// role each color plays, just Spotify's light-mode palette instead of its
-// dark one: white window background, light-gray cards.
-const BG = '#ffffff';
-const CARD_BG = '#f0f0f0';
+// Follows the site's global theme — Spotify's own light-mode palette (white
+// window, light-gray cards) when the site is light, its classic near-black
+// palette when the site is dark, rather than a palette fixed to one or the
+// other.
+function paletteFor(isLight: boolean) {
+  return isLight
+    ? { bg: '#ffffff', cardBg: '#f0f0f0', text: '#000000' }
+    : { bg: '#0a0a0a', cardBg: '#181818', text: '#ffffff' };
+}
 
 // Spotify's actual soundwave-arc logomark path (also used by the dock's own
 // SpotifyIcon in MacIcons.tsx) — reused here for the splash screen rather
@@ -131,11 +135,11 @@ function VolumeIcon(props: React.SVGProps<SVGSVGElement>) {
 // once mounted, no JS driving it) and loops every 5s; that's fine here
 // since it's only ever on screen for SPLASH_MS before this wrapper fades
 // it out.
-function SpotifySplash() {
+function SpotifySplash({ bg }: { bg: string }) {
   return (
     <motion.div
       className="absolute inset-0 z-30 flex items-center justify-center"
-      style={{ background: BG }}
+      style={{ background: bg }}
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4, ease: 'easeInOut' }}
@@ -170,10 +174,14 @@ function TrackCarousel({
   tracks,
   currentId,
   onActivate,
+  isLight,
+  cardBg,
 }: {
   tracks: YouTubeTrack[];
   currentId?: string;
   onActivate: (track: YouTubeTrack, index: number) => void;
+  isLight: boolean;
+  cardBg: string;
 }) {
   const items: PerspectiveCarouselItem[] = useMemo(
     () => tracks.map((t) => ({ src: t.thumbnail, title: t.title, alt: t.title })),
@@ -186,15 +194,16 @@ function TrackCarousel({
       items={items}
       defaultActiveIndex={defaultActiveIndex}
       onSlideActivate={(index) => onActivate(tracks[index], index)}
-      labelClassName="text-black font-medium"
-      controlsClassName="border-black/10 text-black/70"
-      style={{ background: CARD_BG }}
+      labelClassName={isLight ? 'text-black font-medium' : 'text-white font-medium'}
+      controlsClassName={isLight ? 'border-black/10 text-black/70' : 'border-white/10 text-white/70'}
+      style={{ background: cardBg }}
       className="rounded-xl"
     />
   );
 }
 
-export default function SpotifyApp() {
+export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
+  const { bg: BG, cardBg: CARD_BG } = paletteFor(isLight);
   const containerRef = useRef<HTMLDivElement>(null);
   const player = useYouTubePlayer();
   const [query, setQuery] = useState('');
@@ -264,36 +273,45 @@ export default function SpotifyApp() {
 
   const progress = player.duration > 0 ? (player.currentTime / player.duration) * 100 : 0;
 
+  const textClass = isLight ? 'text-black' : 'text-white';
+  const sliderThumbClass = isLight ? '[&::-webkit-slider-thumb]:bg-black' : '[&::-webkit-slider-thumb]:bg-white';
+
   return (
-    <div ref={containerRef} className="relative flex h-full w-full flex-col overflow-hidden text-black" style={{ background: BG }}>
+    <div ref={containerRef} className={`relative flex h-full w-full flex-col overflow-hidden ${textClass}`} style={{ background: BG }}>
       {/* Background — a real (memoized-by-default-options, so this never
           recreates the WebGL scene on re-render) three.js highway of
-          streaking car lights, behind everything else. A light scrim (was
-          dark, to fade into the window's old near-black background) sits
-          between it and the real content so the search field, track list
-          and transport controls all stay legible over the busier bits of
-          the animation rather than just laid bare on top of it. */}
+          streaking car lights, behind everything else. A scrim sits between
+          it and the real content so the search field, track list and
+          transport controls all stay legible over the busier bits of the
+          animation rather than just laid bare on top of it — light or dark
+          to match whichever palette is active. */}
       <div className="absolute inset-0 z-0">
         <Hyperspeed />
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.8) 60%, rgba(255,255,255,0.92))' }} />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: isLight
+              ? 'linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.8) 60%, rgba(255,255,255,0.92))'
+              : 'linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.8) 60%, rgba(0,0,0,0.92))',
+          }}
+        />
       </div>
 
-      <AnimatePresence>{showSplash && <SpotifySplash />}</AnimatePresence>
+      <AnimatePresence>{showSplash && <SpotifySplash bg={BG} />}</AnimatePresence>
 
       {/* Header — a top scroll-free bar with the search pill, styled after
-          Spotify's own light-mode search field, set off from the window's
-          own now-white background with a light-gray fill rather than a
-          border. */}
+          Spotify's own search field, set off from the window's own
+          background with a lightly contrasting fill rather than a border. */}
       <div className="relative z-10 flex shrink-0 items-center gap-3 px-5 pb-3 pt-4">
         <SoundwaveGlyph className="h-6 w-6 shrink-0" style={{ color: ACCENT }} />
         <form onSubmit={handleSearch} className="relative flex-1">
-          <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-black/60" />
+          <SearchIcon className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${isLight ? 'text-black/60' : 'text-white/60'}`} />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="What do you want to play?"
-            className="w-full rounded-full py-2.5 pl-10 pr-4 text-sm text-black outline-none placeholder:text-black/50"
+            className={`w-full rounded-full py-2.5 pl-10 pr-4 text-sm outline-none ${textClass} ${isLight ? 'placeholder:text-black/50' : 'placeholder:text-white/50'}`}
             style={{ background: CARD_BG }}
           />
         </form>
@@ -303,8 +321,8 @@ export default function SpotifyApp() {
           same 3D perspective carousel (TrackCarousel above). */}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {status === 'searching' && (
-          <div className="flex h-full items-center justify-center gap-2 text-sm text-black/60">
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/25 border-t-black/70" aria-hidden />
+          <div className={`flex h-full items-center justify-center gap-2 text-sm ${isLight ? 'text-black/60' : 'text-white/60'}`}>
+            <span className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${isLight ? 'border-black/25 border-t-black/70' : 'border-white/25 border-t-white/70'}`} aria-hidden />
             Searching&hellip;
           </div>
         )}
@@ -312,18 +330,22 @@ export default function SpotifyApp() {
         {status === 'idle' && results.length === 0 && (
           recentTracks.length > 0 ? (
             <div className="flex h-full min-h-0 flex-1 flex-col gap-3 px-5 pb-4 pt-1">
-              <div className="text-lg font-bold text-black">Recently played</div>
+              <div className={`text-lg font-bold ${textClass}`}>Recently played</div>
               <div className="relative min-h-0 flex-1">
                 <TrackCarousel
                   key={recentTracks.map((t) => t.id).join('|')}
                   tracks={recentTracks}
                   currentId={player.current?.id}
                   onActivate={(track, index) => playTrack(track, recentTracks, index)}
+                  isLight={isLight}
+                  cardBg={CARD_BG}
                 />
               </div>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-black/50">Search for a song to get started.</div>
+            <div className={`flex h-full items-center justify-center px-6 text-center text-sm ${isLight ? 'text-black/50' : 'text-white/50'}`}>
+              Search for a song to get started.
+            </div>
           )
         )}
         {results.length > 0 && (
@@ -333,6 +355,8 @@ export default function SpotifyApp() {
               tracks={results}
               currentId={player.current?.id}
               onActivate={(track, index) => playTrack(track, results, index)}
+              isLight={isLight}
+              cardBg={CARD_BG}
             />
           </div>
         )}
@@ -341,49 +365,62 @@ export default function SpotifyApp() {
       {/* Now-playing bar — Spotify's real 3-column layout: track info on
           the left, transport + progress centered, mute on the right (no
           numeric volume level to show — the player only exposes a mute
-          toggle). Central play/pause is a black filled circle with a white
-          glyph (was the inverse — white circle, black glyph — to stand out
-          against the old dark bar; black is what stands out against this
-          now-light one), distinct from the green play buttons used on
-          cards. */}
+          toggle). Central play/pause is a filled circle with a contrasting
+          glyph, distinct from the green play buttons used on cards. */}
       {player.current && (
         <div
-          className="relative z-10 grid shrink-0 grid-cols-3 items-center gap-3 border-t border-black/10 px-4 py-3"
-          style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+          className={`relative z-10 grid shrink-0 grid-cols-3 items-center gap-3 border-t px-4 py-3 ${isLight ? 'border-black/10' : 'border-white/10'}`}
+          style={{
+            background: isLight ? 'rgba(255,255,255,0.85)' : 'rgba(10,10,10,0.85)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+          }}
         >
           <div className="flex min-w-0 items-center gap-3">
             <img src={player.current.thumbnail} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-black">{player.current.title}</div>
-              <div className="truncate text-xs text-black/50">{player.current.channelTitle}</div>
+              <div className={`truncate text-sm font-medium ${textClass}`}>{player.current.title}</div>
+              <div className={`truncate text-xs ${isLight ? 'text-black/50' : 'text-white/50'}`}>{player.current.channelTitle}</div>
             </div>
           </div>
 
           <div className="flex flex-col items-center gap-1.5">
             <div className="flex items-center gap-4">
-              <button type="button" aria-label="Previous" onClick={player.skipPrev} className="text-black/70 transition hover:text-black">
+              <button
+                type="button"
+                aria-label="Previous"
+                onClick={player.skipPrev}
+                className={`transition ${isLight ? 'text-black/70 hover:text-black' : 'text-white/70 hover:text-white'}`}
+              >
                 <PrevIcon className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 aria-label={player.playing ? 'Pause' : 'Play'}
                 onClick={player.togglePlay}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition hover:scale-105"
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition hover:scale-105 ${
+                  isLight ? 'bg-black text-white' : 'bg-white text-black'
+                }`}
               >
                 {player.loading ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${isLight ? 'border-white/30 border-t-white' : 'border-black/30 border-t-black'}`} />
                 ) : player.playing ? (
                   <PauseIcon className="h-4 w-4" />
                 ) : (
                   <PlayIcon className="ml-0.5 h-4 w-4" />
                 )}
               </button>
-              <button type="button" aria-label="Next" onClick={player.skipNext} className="text-black/70 transition hover:text-black">
+              <button
+                type="button"
+                aria-label="Next"
+                onClick={player.skipNext}
+                className={`transition ${isLight ? 'text-black/70 hover:text-black' : 'text-white/70 hover:text-white'}`}
+              >
                 <NextIcon className="h-4 w-4" />
               </button>
             </div>
             <div className="flex w-full max-w-xs items-center gap-2">
-              <span className="w-8 text-right text-[10px] tabular-nums text-black/40">{formatTime(player.currentTime)}</span>
+              <span className={`w-8 text-right text-[10px] tabular-nums ${isLight ? 'text-black/40' : 'text-white/40'}`}>{formatTime(player.currentTime)}</span>
               <input
                 type="range"
                 min={0}
@@ -392,15 +429,20 @@ export default function SpotifyApp() {
                 onChange={(e) => {
                   if (player.duration > 0) player.seek((Number(e.target.value) / 100) * player.duration);
                 }}
-                className="h-1 flex-1 cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-black"
-                style={{ background: `linear-gradient(to right, ${ACCENT} ${progress}%, rgba(0,0,0,0.15) ${progress}%)` }}
+                className={`h-1 flex-1 cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full ${sliderThumbClass}`}
+                style={{ background: `linear-gradient(to right, ${ACCENT} ${progress}%, ${isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)'} ${progress}%)` }}
               />
-              <span className="w-8 text-[10px] tabular-nums text-black/40">{formatTime(player.duration)}</span>
+              <span className={`w-8 text-[10px] tabular-nums ${isLight ? 'text-black/40' : 'text-white/40'}`}>{formatTime(player.duration)}</span>
             </div>
           </div>
 
           <div className="flex items-center justify-end">
-            <button type="button" aria-label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} className="text-black/70 transition hover:text-black">
+            <button
+              type="button"
+              aria-label={muted ? 'Unmute' : 'Mute'}
+              onClick={toggleMute}
+              className={`transition ${isLight ? 'text-black/70 hover:text-black' : 'text-white/70 hover:text-white'}`}
+            >
               {muted ? <MuteIcon className="h-4 w-4" /> : <VolumeIcon className="h-4 w-4" />}
             </button>
           </div>

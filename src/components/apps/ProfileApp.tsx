@@ -4,6 +4,6 @@
 // card entirely per a full redesign request, not layered alongside it.
 import BentoProfile from './profile/BentoProfile';
 
-export default function ProfileApp() {
-  return <BentoProfile />;
+export default function ProfileApp({ isLight = true }: { isLight?: boolean }) {
+  return <BentoProfile isLight={isLight} />;
 }

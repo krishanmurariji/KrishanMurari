@@ -61,7 +61,7 @@ const items = CERTIFICATE_FILES.map((file) => ({
   text: labelFor(file),
 }));
 
-export default function CertificationsApp({ interactive }: { interactive?: boolean }) {
+export default function CertificationsApp({ interactive, isLight = false }: { interactive?: boolean; isLight?: boolean }) {
   // The gallery bends and rotates every plane for the 3D effect, which is
   // great for browsing but makes the image itself hard to actually read —
   // clicking whichever certificate is currently front-and-center opens it
@@ -93,16 +93,19 @@ export default function CertificationsApp({ interactive }: { interactive?: boole
   // really opened. Rendering nothing but the plain backdrop for that hidden
   // copy keeps the genie a neutral zoom, with the real reveal (background,
   // then gallery) only ever happening in the real, interactive window.
+  const bg = isLight ? '#f4f3f7' : '#0c0c10';
+  const fluidColor = isLight ? '#1c1c1e' : '#ffffff';
+
   if (!interactive) {
-    return <div className="h-full w-full" style={{ background: '#0c0c10' }} />;
+    return <div className="h-full w-full" style={{ background: bg }} />;
   }
 
   return (
-    <div className="relative h-full w-full" style={{ background: '#0c0c10' }}>
+    <div className="relative h-full w-full" style={{ background: bg }}>
       <div className="absolute inset-0 z-0">
         <Ferrofluid
           paused={reducedMotion}
-          colors={['#ffffff', '#ffffff', '#ffffff']}
+          colors={[fluidColor, fluidColor, fluidColor]}
           speed={0.5}
           scale={1.6}
           turbulence={1}
@@ -130,7 +133,7 @@ export default function CertificationsApp({ interactive }: { interactive?: boole
           >
             <CircularGallery
               bend={1}
-              textColor="#ffffff"
+              textColor={isLight ? '#1c1c1e' : '#ffffff'}
               borderRadius={0.05}
               scrollEase={0.05}
               scrollSpeed={2}
@@ -144,14 +147,16 @@ export default function CertificationsApp({ interactive }: { interactive?: boole
       {preview && (
         <div
           className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 p-6"
-          style={{ background: 'rgba(6,6,8,0.94)' }}
+          style={{ background: isLight ? 'rgba(244,243,247,0.96)' : 'rgba(6,6,8,0.94)' }}
           onClick={() => setPreview(null)}
         >
           <button
             type="button"
             aria-label="Close"
             onClick={() => setPreview(null)}
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-xl text-white/80 transition hover:bg-white/10 hover:text-white"
+            className={`absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-xl transition ${
+              isLight ? 'text-black/70 hover:bg-black/10 hover:text-black' : 'text-white/80 hover:bg-white/10 hover:text-white'
+            }`}
           >
             &times;
           </button>
@@ -161,7 +166,7 @@ export default function CertificationsApp({ interactive }: { interactive?: boole
             className="max-h-[80%] max-w-[92%] rounded-lg object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
-          <div className="text-sm text-white/70">{preview.text}</div>
+          <div className={`text-sm ${isLight ? 'text-black/70' : 'text-white/70'}`}>{preview.text}</div>
         </div>
       )}
     </div>

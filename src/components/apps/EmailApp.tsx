@@ -82,6 +82,7 @@ function SimpleField({
   type = 'text',
   placeholder,
   counter,
+  isLight,
 }: {
   id: string;
   label: string;
@@ -96,11 +97,12 @@ function SimpleField({
   type?: string;
   placeholder?: string;
   counter?: string;
+  isLight: boolean;
 }) {
   const showError = Boolean(touched && error);
-  const fieldClass = `neumorphic-inset w-full rounded-xl border-0 px-3.5 py-2.5 text-sm text-[#1c1c1e] outline-none transition-shadow duration-150 placeholder:text-black/35 focus-visible:ring-2 ${
-    showError ? 'ring-2 ring-red-400' : 'focus-visible:ring-black/25'
-  }${multiline ? ' resize-none' : ''}`;
+  const fieldClass = `${isLight ? 'neumorphic-inset' : 'neumorphic-inset-dark'} w-full rounded-xl border-0 px-3.5 py-2.5 text-sm outline-none transition-shadow duration-150 focus-visible:ring-2 ${
+    isLight ? 'text-[#1c1c1e] placeholder:text-black/35' : 'text-white placeholder:text-white/35'
+  } ${showError ? 'ring-2 ring-red-400' : isLight ? 'focus-visible:ring-black/25' : 'focus-visible:ring-white/25'}${multiline ? ' resize-none' : ''}`;
 
   const sharedProps = {
     id,
@@ -114,7 +116,7 @@ function SimpleField({
 
   return (
     <div className={multiline ? 'flex h-full flex-col' : undefined}>
-      <label htmlFor={id} className="mb-2 block text-sm font-medium text-[#1c1c1e]">
+      <label htmlFor={id} className={`mb-2 block text-sm font-medium ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}>
         {label}
       </label>
       <div className={multiline ? 'relative min-h-0 flex-1' : 'relative'}>
@@ -123,7 +125,11 @@ function SimpleField({
         ) : (
           <input {...sharedProps} type={type} />
         )}
-        {counter && <span className="pointer-events-none absolute bottom-2 right-3 text-[11px] text-black/35">{counter}</span>}
+        {counter && (
+          <span className={`pointer-events-none absolute bottom-2 right-3 text-[11px] ${isLight ? 'text-black/35' : 'text-white/35'}`}>
+            {counter}
+          </span>
+        )}
       </div>
       <AnimatePresence initial={false}>
         {showError && (
@@ -151,7 +157,7 @@ const fieldVariants = {
 // clears and goes back to idle, ready for another message.
 const SENT_HOLD_MS = 2400;
 
-export default function EmailApp({ interactive }: { interactive?: boolean }) {
+export default function EmailApp({ interactive, isLight = true }: { interactive?: boolean; isLight?: boolean }) {
   // Prefixes every field id below — AppWindow's useSharedSnapshots mounts a
   // second, hidden copy of this whole component off-screen to rasterize the
   // dock's genie-open snapshot, so a hardcoded "email"/"subject"/"message"
@@ -241,7 +247,9 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
       {showContent && (
         <div
           data-lenis-prevent
-          className="no-scrollbar flex h-full w-full flex-col items-center overflow-y-auto overflow-x-hidden bg-[#eef1f6] p-6 sm:p-8 lg:p-10"
+          className={`no-scrollbar flex h-full w-full flex-col items-center overflow-y-auto overflow-x-hidden p-6 sm:p-8 lg:p-10 ${
+            isLight ? 'bg-[#eef1f6]' : 'bg-black'
+          }`}
         >
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -249,8 +257,8 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
             transition={{ duration: 0.35 }}
             className="flex h-full w-full max-w-lg flex-col sm:max-w-xl lg:max-w-2xl xl:max-w-4xl"
           >
-            <div className="text-lg font-semibold text-[#1c1c1e] lg:text-xl">Get in touch</div>
-            <p className="mt-1 text-sm text-black/60 lg:text-base">
+            <div className={`text-lg font-semibold lg:text-xl ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}>Get in touch</div>
+            <p className={`mt-1 text-sm lg:text-base ${isLight ? 'text-black/60' : 'text-white/60'}`}>
               Send a message straight to my inbox — I&rsquo;ll reply at the email you give below.
             </p>
 
@@ -265,7 +273,7 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
             <form
               onSubmit={handleSubmit}
               noValidate
-              className="neumorphic mt-5 flex flex-1 flex-col space-y-5 rounded-3xl p-6 lg:p-8"
+              className={`${isLight ? 'neumorphic' : 'neumorphic-dark'} mt-5 flex flex-1 flex-col space-y-5 rounded-3xl p-6 lg:p-8`}
             >
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <motion.div custom={0} variants={fieldVariants} initial="hidden" animate="show">
@@ -280,6 +288,7 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
                       onBlur={() => handleBlur('email')}
                       error={errors.email}
                       touched={touched.email}
+                      isLight={isLight}
                     />
                   </fieldset>
                 </motion.div>
@@ -296,6 +305,7 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
                       error={errors.subject}
                       touched={touched.subject}
                       maxLength={SUBJECT_MAX}
+                      isLight={isLight}
                     />
                   </fieldset>
                 </motion.div>
@@ -316,6 +326,7 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
                     rows={6}
                     maxLength={MESSAGE_MAX}
                     counter={`${message.length}/${MESSAGE_MAX}`}
+                    isLight={isLight}
                   />
                 </fieldset>
               </motion.div>
@@ -329,7 +340,13 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 ring-1 ring-red-200">{serverError}</div>
+                    <div
+                      className={`rounded-lg px-3 py-2 text-sm ring-1 ${
+                        isLight ? 'bg-red-50 text-red-600 ring-red-200' : 'bg-red-500/10 text-red-300 ring-red-500/30'
+                      }`}
+                    >
+                      {serverError}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -360,6 +377,7 @@ export default function EmailApp({ interactive }: { interactive?: boolean }) {
                     <Turnstile
                       ref={turnstileRef}
                       siteKey={TURNSTILE_SITE_KEY}
+                      theme={isLight ? 'light' : 'dark'}
                       onVerify={setTurnstileToken}
                       onExpire={() => setTurnstileToken(null)}
                       onError={() => setTurnstileToken(null)}

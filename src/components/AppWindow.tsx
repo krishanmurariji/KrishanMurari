@@ -124,7 +124,7 @@ function renderGenie(
 // data and has no reason to know about window content.
 const APP_BODIES: Record<
   string,
-  ComponentType<{ interactive?: boolean; sceneCanvasRef?: React.RefObject<HTMLCanvasElement | null> }>
+  ComponentType<{ interactive?: boolean; sceneCanvasRef?: React.RefObject<HTMLCanvasElement | null>; isLight?: boolean }>
 > = {
   profile: ProfileApp,
   experience: ExperienceApp,
@@ -139,6 +139,7 @@ export function WindowChrome({
   windowed,
   interactive,
   sceneCanvasRef,
+  isLight = true,
   onClose,
   onMinimize,
   onToggleWindowed,
@@ -147,6 +148,7 @@ export function WindowChrome({
   windowed?: boolean;
   interactive?: boolean;
   sceneCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
+  isLight?: boolean;
   onClose?: () => void;
   onMinimize?: () => void;
   onToggleWindowed?: () => void;
@@ -226,27 +228,27 @@ export function WindowChrome({
         )}
       </div>
       {CustomBody ? (
-        <div className="flex-1 min-h-0 bg-white">
+        <div className={`flex-1 min-h-0 ${isLight ? 'bg-white' : 'bg-black'}`}>
           <Suspense fallback={null}>
-            <CustomBody interactive={interactive} sceneCanvasRef={sceneCanvasRef} />
+            <CustomBody interactive={interactive} sceneCanvasRef={sceneCanvasRef} isLight={isLight} />
           </Suspense>
         </div>
       ) : (
-        <div className="flex-1 bg-white flex flex-col items-center justify-center gap-4 text-center px-6">
+        <div className={`flex-1 flex flex-col items-center justify-center gap-4 text-center px-6 ${isLight ? 'bg-white' : 'bg-black'}`}>
           <Icon className="w-16 h-16" />
-          <div className="text-xl font-semibold text-[#1c1c1e]">{app.label}</div>
-          {app.handle && <div className="text-black/50 font-mono text-xs">{app.handle}</div>}
+          <div className={`text-xl font-semibold ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}>{app.label}</div>
+          {app.handle && <div className={`font-mono text-xs ${isLight ? 'text-black/50' : 'text-white/50'}`}>{app.handle}</div>}
           {app.url ? (
             <a
               href={app.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-5 py-2 rounded-full bg-[#1c1c1e] text-white text-sm font-medium hover:brightness-110 transition"
+              className={`px-5 py-2 rounded-full text-sm font-medium hover:brightness-110 transition ${isLight ? 'bg-[#1c1c1e] text-white' : 'bg-white text-black'}`}
             >
               Open {app.label}
             </a>
           ) : (
-            <div className="text-black/40 text-sm">Content coming soon</div>
+            <div className={`text-sm ${isLight ? 'text-black/40' : 'text-white/40'}`}>Content coming soon</div>
           )}
         </div>
       )}
@@ -381,6 +383,7 @@ export default function AppWindow({
   minimized,
   snapshotsRef,
   sceneCanvasRef,
+  isLight = true,
   onMinimize,
   onRestore,
   onCloseComplete,
@@ -397,6 +400,7 @@ export default function AppWindow({
    * needs the same "glass over the scene" trick MenuBar/MacDock/
    * ControlCenterPanel already use (currently just SpotifyApp). */
   sceneCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
+  isLight?: boolean;
   onMinimize: () => void;
   onRestore: () => void;
   /** Called once the close genie has fully played — the parent unmounts this
@@ -610,6 +614,7 @@ export default function AppWindow({
             interactive
             windowed={windowed}
             sceneCanvasRef={sceneCanvasRef}
+            isLight={isLight}
             onClose={handleCloseClick}
             onMinimize={onMinimize}
             onToggleWindowed={() => setWindowed((w) => !w)}

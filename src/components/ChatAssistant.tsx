@@ -161,6 +161,7 @@ export default function ChatAssistant({
   trayRect,
   onMinimize,
   onRestore,
+  isLight = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -179,6 +180,7 @@ export default function ChatAssistant({
   trayRect?: DockRect | null;
   onMinimize?: () => void;
   onRestore?: () => void;
+  isLight?: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -652,7 +654,9 @@ export default function ChatAssistant({
               : 'relative flex h-[88vh] max-h-[580px] w-[94vw] max-w-[760px] flex-col overflow-hidden rounded-[12px] border border-white/15'
           }
           style={{
-            background: 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
+            background: isLight
+              ? 'linear-gradient(155deg, rgba(255,255,255,0.82), rgba(235,235,240,0.82))'
+              : 'linear-gradient(155deg, rgba(48,54,72,0.62), rgba(18,20,28,0.72))',
             backdropFilter: 'blur(36px) saturate(180%)',
             WebkitBackdropFilter: 'blur(36px) saturate(180%)',
             boxShadow: '0 6px 14px rgba(0,0,0,0.28)',
@@ -789,7 +793,7 @@ export default function ChatAssistant({
                       showCursor
                       cursorCharacter="_"
                       loop={false}
-                      className="max-w-md text-center text-lg font-medium text-white sm:text-xl"
+                      className={`max-w-md text-center text-lg font-medium sm:text-xl ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}
                     />
                   </motion.div>
                 )}
@@ -806,9 +810,9 @@ export default function ChatAssistant({
                   >
                     <div ref={scrollRef} data-lenis-prevent className="no-scrollbar h-full space-y-4 overflow-y-auto px-5 py-6 sm:px-8">
                       {messages.map((m, i) => (
-                        <ChatBubble key={i} role={m.role} text={m.text} />
+                        <ChatBubble key={i} role={m.role} text={m.text} isLight={isLight} />
                       ))}
-                      {sending && <TypingBubble />}
+                      {sending && <TypingBubble isLight={isLight} />}
                     </div>
                   </motion.div>
                 )}
@@ -832,7 +836,11 @@ export default function ChatAssistant({
               transition={{ duration: 0.35, ease: 'easeOut' }}
               style={{ pointerEvents: introDone ? 'auto' : 'none' }}
               className="flex shrink-0 flex-col items-center gap-2 px-6 pb-8 pt-2">
-              {error && <div className="rounded-lg bg-red-500/15 px-3 py-1.5 text-[12px] text-red-300">{error}</div>}
+              {error && (
+                <div className={`rounded-lg px-3 py-1.5 text-[12px] ${isLight ? 'bg-red-500/10 text-red-600' : 'bg-red-500/15 text-red-300'}`}>
+                  {error}
+                </div>
+              )}
 
               {/* Only rendered while actually needed — up until the first
                   message is verified, not for the panel's whole lifetime —
@@ -852,7 +860,7 @@ export default function ChatAssistant({
                     <Turnstile
                       ref={turnstileRef}
                       siteKey={TURNSTILE_SITE_KEY}
-                      theme="dark"
+                      theme={isLight ? 'light' : 'dark'}
                       onVerify={setTurnstileToken}
                       onExpire={() => setTurnstileToken(null)}
                       onError={() => setTurnstileToken(null)}
@@ -862,7 +870,9 @@ export default function ChatAssistant({
               </AnimatePresence>
 
               <div
-                className="flex w-full max-w-2xl items-end gap-2 rounded-[28px] border border-white/15 bg-white/10 p-2 pl-4 shadow-lg backdrop-blur-xl"
+                className={`flex w-full max-w-2xl items-end gap-2 rounded-[28px] border p-2 pl-4 shadow-lg backdrop-blur-xl ${
+                  isLight ? 'border-black/10 bg-black/5' : 'border-white/15 bg-white/10'
+                }`}
               >
                 <textarea
                   value={input}
@@ -881,13 +891,15 @@ export default function ChatAssistant({
                   maxLength={MAX_MESSAGE_LENGTH}
                   rows={1}
                   placeholder="Message I…"
-                  className="max-h-28 min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[14px] text-white placeholder:text-white/40 outline-none disabled:opacity-50"
+                  className={`max-h-28 min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[14px] outline-none disabled:opacity-50 ${
+                    isLight ? 'text-[#1c1c1e] placeholder:text-black/40' : 'text-white placeholder:text-white/40'
+                  }`}
                 />
                 {speechSupported && (
                   <VoicePill
-                    accentColor="#f5f5f5"
-                    iconColor="#a1a1aa"
-                    background="#27272a"
+                    accentColor={isLight ? '#1c1c1e' : '#f5f5f5'}
+                    iconColor={isLight ? '#6b6b70' : '#a1a1aa'}
+                    background={isLight ? '#e4e4e8' : '#27272a'}
                     size={40}
                     shape="pill"
                     reach={8}
@@ -913,7 +925,9 @@ export default function ChatAssistant({
                   onClick={handleSend}
                   disabled={sending || !input.trim()}
                   aria-label="Send message"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black transition disabled:cursor-default disabled:opacity-40"
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition disabled:cursor-default disabled:opacity-40 ${
+                    isLight ? 'bg-[#1c1c1e] text-white' : 'bg-white text-black'
+                  }`}
                 >
                   <SendIcon className="h-[18px] w-[18px]" />
                 </button>
@@ -972,7 +986,7 @@ export default function ChatAssistant({
   );
 }
 
-function ChatBubble({ role, text }: { role: 'user' | 'model'; text: string }) {
+function ChatBubble({ role, text, isLight }: { role: 'user' | 'model'; text: string; isLight: boolean }) {
   const isUser = role === 'user';
   return (
     <motion.div
@@ -983,7 +997,9 @@ function ChatBubble({ role, text }: { role: 'user' | 'model'; text: string }) {
     >
       <div
         className={`max-w-[75%] whitespace-pre-wrap break-words rounded-3xl px-4 py-2.5 text-[14px] leading-relaxed ${
-          isUser ? 'rounded-br-md bg-white text-black' : 'rounded-bl-md bg-white/10 text-white/90'
+          isUser
+            ? `rounded-br-md ${isLight ? 'bg-[#1c1c1e] text-white' : 'bg-white text-black'}`
+            : `rounded-bl-md ${isLight ? 'bg-black/5 text-[#1c1c1e]' : 'bg-white/10 text-white/90'}`
         }`}
       >
         {text}
@@ -992,14 +1008,14 @@ function ChatBubble({ role, text }: { role: 'user' | 'model'; text: string }) {
   );
 }
 
-function TypingBubble() {
+function TypingBubble({ isLight }: { isLight: boolean }) {
   return (
     <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} className="flex justify-start">
-      <div className="flex items-center gap-1 rounded-3xl rounded-bl-md bg-white/10 px-4 py-3">
+      <div className={`flex items-center gap-1 rounded-3xl rounded-bl-md px-4 py-3 ${isLight ? 'bg-black/5' : 'bg-white/10'}`}>
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/50"
+            className={`h-1.5 w-1.5 animate-bounce rounded-full ${isLight ? 'bg-black/40' : 'bg-white/50'}`}
             style={{ animationDelay: `${i * 0.12}s` }}
           />
         ))}

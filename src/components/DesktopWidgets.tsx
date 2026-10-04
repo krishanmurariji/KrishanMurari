@@ -901,34 +901,28 @@ function PhotoCard({ isLight = true }: { isLight?: boolean }) {
           </span>
           <p className={cn('mt-1.5 text-[11px] leading-snug', isLight ? 'text-black/55' : 'text-white/60')}>{BIO}</p>
         </div>
-        <div className="absolute inset-x-6 bottom-4 flex items-center justify-between">
-          <div className="flex gap-2">
-            {PHOTO_SOCIAL_LINKS.map(({ label, href, Icon, brand }) => (
-              <SocialIconButton key={label} label={label} href={href} Icon={Icon} brand={brand} isLight={isLight} />
-            ))}
-          </div>
-          {/* Purely decorative — the bot just floats and tracks the cursor
-              here (trackMouse) rather than being clickable; the dock's Messages
-              icon is the only way to open the chat now (see App.tsx's
-              dockApps). Matching SocialIconButton's outer box size alone
-              (h-7 w-7) wasn't actually enough to read as "the same size" —
-              SocialIconButton is a filled circular badge with a background
-              and border, and its glyph only fills a fraction of that badge;
-              a bare transparent h-7 w-7 canvas next to it read as smaller
-              and weightless by comparison. Wrapping the bot in the same
-              badge treatment (rounded-full, matching background/border)
-              gives it the same visual footprint as every other icon in
-              this row rather than just the same bounding box. */}
-          <div
-            className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border"
-            style={{
-              background: isLight ? '#ffffff' : 'rgba(255,255,255,0.08)',
-              borderColor: isLight ? '#e5e5ea' : 'rgba(255,255,255,0.15)',
-            }}
-          >
-            <RobotAvatar3D className="h-full w-full" trackMouse />
-          </div>
+        <div className="absolute inset-x-6 bottom-4 flex items-center gap-2">
+          {PHOTO_SOCIAL_LINKS.map(({ label, href, Icon, brand }) => (
+            <SocialIconButton key={label} label={label} href={href} Icon={Icon} brand={brand} isLight={isLight} />
+          ))}
         </div>
+      </div>
+
+      {/* The bot, back at a proper "it's actually a character" size rather
+          than shrunk to an inline icon-row badge — pinned to the card's own
+          bottom-right corner, outside the reveal panel, so it reads as a
+          mascot peeking out of the corner rather than just another row
+          item. (ChatAssistant's own hero bot runs up to 192px, but this
+          card is only 308px square — matching that literally would bury
+          the name/bio text underneath it; this is the largest size that
+          still leaves the reveal panel's own content legible.) Purely
+          decorative (trackMouse only tracks the cursor via a window
+          listener, not a click target — the dock's Messages icon is the
+          only way to actually open the chat), so pointer-events stay off
+          here rather than sitting on top of the mail link/social icons
+          underneath it. */}
+      <div className="pointer-events-none absolute bottom-0 right-0 z-[4] h-24 w-24 sm:h-28 sm:w-28">
+        <RobotAvatar3D className="h-full w-full" trackMouse />
       </div>
     </div>
   );

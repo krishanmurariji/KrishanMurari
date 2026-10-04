@@ -285,6 +285,22 @@ function isCanvasBlank(canvas: HTMLCanvasElement): boolean {
 export function useSharedSnapshots(apps: DockApp[]) {
   const snapshotsRef = useRef<Record<string, HTMLCanvasElement>>({});
   const hostRef = useRef<HTMLDivElement>(null);
+  // Which apps still need their off-screen body mounted — starts as
+  // "every app" and shrinks as each one's capture resolves. Previously
+  // every app's real body stayed mounted here forever after capture, which
+  // for an app with its own continuous WebGL render loop (SpotifyApp's
+  // Hyperspeed background — full three.js scene, bloom/SMAA postprocessing,
+  // its own rAF loop) meant that scene kept rendering every frame,
+  // invisibly, for the entire lifetime of the page, just to have produced
+  // one static thumbnail early on — confirmed live: under throttled CPU,
+  // the idle desktop (nothing ever opened) was already running two full 3D
+  // scenes at once, main Scene plus this one, well into multi-second long
+  // tasks. Unmounting WindowChrome the moment its own capture settles (the
+  // outer per-app wrapper div stays, so `nodes`' indices below stay stable
+  // for whichever other captures are still in flight) stops that for good;
+  // the captured canvas itself lives in `snapshotsRef` (a ref, unaffected
+  // by the unmount) for the genie/tray-tile code to keep using after.
+  const [pendingIds, setPendingIds] = useState<string[]>(() => apps.map((a) => a.id));
 
   useEffect(() => {
     let cancelled = false;
@@ -306,6 +322,7 @@ export function useSharedSnapshots(apps: DockApp[]) {
       await Promise.allSettled(
         nodes.map(async (node, i) => {
           if (cancelled) return;
+          const appId = apps[i].id;
           try {
             const canvas = await Promise.race([
               toCanvas(node, { pixelRatio: 1, cacheBust: false, skipFonts: true }),
@@ -322,10 +339,12 @@ export function useSharedSnapshots(apps: DockApp[]) {
               new Promise<never>((_, reject) => setTimeout(() => reject(new Error('snapshot timed out')), 20000)),
             ]);
             if (cancelled) return;
-            if (!isCanvasBlank(canvas)) snapshotsRef.current[apps[i].id] = canvas;
+            if (!isCanvasBlank(canvas)) snapshotsRef.current[appId] = canvas;
           } catch {
             // that app just won't have a snapshot — its genie/tray tile fall
             // back to a plain icon block
+          } finally {
+            if (!cancelled) setPendingIds((prev) => (prev.includes(appId) ? prev.filter((id) => id !== appId) : prev));
           }
         })
       );
@@ -346,7 +365,7 @@ export function useSharedSnapshots(apps: DockApp[]) {
     <div ref={hostRef} style={{ position: 'fixed', left: -9999, top: 0, pointerEvents: 'none' }} aria-hidden>
       {apps.map((a) => (
         <div key={a.id} style={{ width: WIN_W, height: WIN_H, borderRadius: 12, overflow: 'hidden' }}>
-          <WindowChrome app={a} />
+          {pendingIds.includes(a.id) && <WindowChrome app={a} />}
         </div>
       ))}
     </div>

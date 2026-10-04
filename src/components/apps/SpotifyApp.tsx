@@ -194,6 +194,16 @@ function TrackCarousel({
       items={items}
       defaultActiveIndex={defaultActiveIndex}
       onSlideActivate={(index) => onActivate(tracks[index], index)}
+      // The carousel centers its image+title column vertically within this
+      // container, while the prev/dots/next pill is pinned to the
+      // container's own bottom edge — at the component's default 200px
+      // slide width (267px-tall artwork, aspect-[3/4]) the centered column
+      // runs taller than the room this card actually has in a non-fullscreen
+      // Spotify window, so the title line lands right on top of the pill
+      // instead of above it. A smaller thumbnail shortens that column enough
+      // to clear the pill with room to spare, even at the window's default
+      // (non-maximized) size.
+      slideWidth={130}
       labelClassName={isLight ? 'text-black font-medium' : 'text-white font-medium'}
       controlsClassName={isLight ? 'border-black/10 text-black/70' : 'border-white/10 text-white/70'}
       style={{ background: cardBg }}

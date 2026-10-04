@@ -339,7 +339,7 @@ export default function BentoProfile({ isLight = true }: { isLight?: boolean }) 
             // here yet, which is why only dragging the scrollbar thumb
             // worked and real wheel/two-finger scroll didn't.
             data-lenis-prevent
-            className="@container absolute inset-0 z-10 overflow-y-auto p-6"
+            className="no-scrollbar @container absolute inset-0 z-10 overflow-y-auto p-6"
           >
             {/* Capped + centered rather than left stuck at a fixed width —
                 on a maximized/fullscreen window this grid was leaving most

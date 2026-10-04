@@ -376,10 +376,21 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
           the left, transport + progress centered, mute on the right (no
           numeric volume level to show — the player only exposes a mute
           toggle). Central play/pause is a filled circle with a contrasting
-          glyph, distinct from the green play buttons used on cards. */}
+          glyph, distinct from the green play buttons used on cards.
+          The center column gets a 2fr share against 1fr on each side
+          (not an even three-way split) — on a narrow mobile window, an
+          even third left the progress slider's own row (two time labels
+          plus the transport buttons above it) too cramped for the slider
+          to render with real width, squeezing the thumb down to barely
+          visible. minmax(0, …) on every track (not a bare 1fr/2fr) is
+          still what lets each column actually shrink below its content's
+          natural width in the first place — Tailwind's own grid-cols-N
+          utilities do the same, which is why the outer two columns
+          (track info's own truncate, the mute button) never needed this
+          called out explicitly before. */}
       {player.current && (
         <div
-          className={`relative z-10 grid shrink-0 grid-cols-3 items-center gap-3 border-t px-4 py-3 ${isLight ? 'border-black/10' : 'border-white/10'}`}
+          className={`relative z-10 grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-3 border-t px-4 py-3 ${isLight ? 'border-black/10' : 'border-white/10'}`}
           style={{
             background: isLight ? 'rgba(255,255,255,0.85)' : 'rgba(10,10,10,0.85)',
             backdropFilter: 'blur(10px)',
@@ -430,7 +441,7 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
               </button>
             </div>
             <div className="flex w-full max-w-xs items-center gap-2">
-              <span className={`w-8 text-right text-[10px] tabular-nums ${isLight ? 'text-black/40' : 'text-white/40'}`}>{formatTime(player.currentTime)}</span>
+              <span className={`w-8 shrink-0 text-right text-[10px] tabular-nums ${isLight ? 'text-black/40' : 'text-white/40'}`}>{formatTime(player.currentTime)}</span>
               <input
                 type="range"
                 min={0}

@@ -116,16 +116,6 @@ const STACK_SIZE = SQUARE * 2 + GAP; // the whole 2x2 grid's total footprint
 const PHOTO_WIDTH = STACK_SIZE;
 const PHOTO_HEIGHT = STACK_SIZE;
 
-// The Clock/Calendar/Weather/Music stack shrinks much further on mobile —
-// down to roughly a single dock icon's own footprint per cell (MacDock's
-// BASE_SIZE is 48px, unscaled across breakpoints) — per explicit request
-// that every widget except Photo read as icon-sized on small screens. Fixed
-// rather than viewport-responsive like MOBILE_SCALE: at this size the
-// stack's whole footprint is small enough to always sit beside Photo
-// without needing a narrower fallback scale the way Photo still does.
-const STACK_ICON_SIZE = 48;
-const STACK_MOBILE_SCALE = STACK_ICON_SIZE / SQUARE;
-
 const WIDGET_SHADOW = '0 10px 30px rgba(0,0,0,0.18)';
 
 // The exact frosted-glass material ControlCenterPanel.tsx uses in dark mode
@@ -1070,25 +1060,40 @@ export default function DesktopWidgets({
     transition: { duration: 1, delay: 0.6, ease: [0.16, 1, 0.3, 1] as const },
   };
 
-  // Two screen-anchored corners: the 2x2 stack top-left, Photo top-right.
-  // On mobile the stack shrinks to icon size (STACK_MOBILE_SCALE, fixed —
-  // see that constant's own comment) while Photo keeps its previous
-  // mobile-scale behavior unchanged, per explicit request that only the
-  // Clock/Calendar/Weather/Music stack — not Photo — minimize down to icon
-  // size on small screens. The icon-sized stack's own footprint is small
-  // enough that side-by-side almost always fits; the vertical-stacking
-  // fallback below still exists purely for Photo's own width against a
-  // genuinely narrow viewport, the same case it already handled.
+  // Mobile gets its own fundamentally different layout, not just a scaled-
+  // down copy of the desktop one — per explicit request: Clock/Calendar/
+  // Weather/Music in a single short horizontal line spanning the full
+  // screen width (not the desktop's 2x2 square huddled in the corner),
+  // Photo moved to the bottom-right instead of competing for top-of-screen
+  // space with the row, and — freed from having to squeeze in beside the
+  // stack — Photo (and the bot pinned to its corner) can run much closer to
+  // its real size instead of the old fixed 0.68 scale.
   if (isMobile) {
     const edgeMargin = 16;
-    const midGap = 12;
-    const stackWidth = STACK_SIZE * STACK_MOBILE_SCALE;
-    const stackHeight = STACK_SIZE * STACK_MOBILE_SCALE;
-    const sideBySideMinWidth = stackWidth + PHOTO_WIDTH * MOBILE_SCALE + edgeMargin * 2 + midGap;
-    const stackVertically = viewportWidth < sideBySideMinWidth;
-    const photoScale = stackVertically
-      ? Math.min(MOBILE_SCALE, Math.max(0.45, (viewportWidth - edgeMargin * 2) / PHOTO_WIDTH))
-      : MOBILE_SCALE;
+    const rowGap = 8;
+    const stackIds = (['calendar', 'weather', 'clock', 'music'] as const).filter(has);
+    // Each cell reserves exactly its scaled footprint (not just a visual
+    // `transform: scale()` over the full-size box) so the row actually lays
+    // out across the real available width instead of overflowing based on
+    // each cell's unscaled 150px size — the same reason the old 2x2 stack's
+    // outer wrapper never needed this (position: fixed with nothing else
+    // depending on its layout box), but a `flex justify-between` row
+    // genuinely does.
+    const rowScale = stackIds.length
+      ? Math.min(0.8, Math.max(0.4, (viewportWidth - edgeMargin * 2 - rowGap * (stackIds.length - 1)) / (SQUARE * stackIds.length)))
+      : 1;
+    const cellSize = SQUARE * rowScale;
+    // No longer sharing a row with the stack, so this scales against its
+    // own full width instead of the old fixed 0.68 — on a typical phone
+    // this lands at or near the 0.9 cap, a real step up from before.
+    const photoScale = Math.min(0.9, Math.max(0.55, (viewportWidth - edgeMargin * 2) / PHOTO_WIDTH));
+
+    const cellContent: Partial<Record<WidgetId, ReactNode>> = {
+      calendar: <CalendarCard />,
+      weather: <WeatherCard />,
+      clock: <AnalogClock isLight={isLight} />,
+      music: <MusicPlayerCard {...music} />,
+    };
 
     return (
       <>
@@ -1096,25 +1101,30 @@ export default function DesktopWidgets({
             duplicated here since this is a separate early return, not a
             shared code path. */}
         <GlassDistortionFilter />
-        {stack && (
+        {stackIds.length > 0 && (
           <motion.div
             {...entrance}
-            className="fixed left-4 z-30"
-            style={{ top: 48, pointerEvents: 'none', transform: `scale(${STACK_MOBILE_SCALE})`, transformOrigin: 'top left' }}
+            className="fixed left-4 right-4 top-12 z-30 flex items-start justify-between"
+            style={{ pointerEvents: 'none', gap: rowGap }}
           >
-            {stack}
+            {stackIds.map((id) => (
+              <div key={id} style={{ width: cellSize, height: cellSize, overflow: 'hidden', flexShrink: 0 }}>
+                <div style={{ width: SQUARE, height: SQUARE, transform: `scale(${rowScale})`, transformOrigin: 'top left' }}>
+                  <EditableWidget editMode={editMode} onRemove={() => onRemoveWidget(id)}>
+                    <GlassCell width={SQUARE} height={SQUARE} sceneCanvasRef={sceneCanvasRef}>
+                      {cellContent[id]}
+                    </GlassCell>
+                  </EditableWidget>
+                </div>
+              </div>
+            ))}
           </motion.div>
         )}
         {photoGroup && (
           <motion.div
             {...entrance}
-            className={cn('fixed z-30', stackVertically ? 'left-4' : 'right-4')}
-            style={{
-              top: stackVertically ? 48 + stackHeight + midGap : 48,
-              pointerEvents: 'none',
-              transform: `scale(${photoScale})`,
-              transformOrigin: stackVertically ? 'top left' : 'top right',
-            }}
+            className="fixed bottom-24 right-4 z-30"
+            style={{ pointerEvents: 'none', transform: `scale(${photoScale})`, transformOrigin: 'bottom right' }}
           >
             {photoGroup}
           </motion.div>

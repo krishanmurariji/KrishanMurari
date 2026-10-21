@@ -15,7 +15,7 @@ import MenuBar from './components/MenuBar';
 import DesktopWidgets from './components/DesktopWidgets';
 import ChatAssistant from './components/ChatAssistant';
 // import { SmoothCursor } from './components/ui/smooth-cursor'; // disabled per request — keeping the component around in case it's wanted back later
-import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon, MessagesIcon, MacFolderIcon } from './components/MacIcons';
+import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon, MessagesIcon, TuxedoIcon } from './components/MacIcons';
 import SignOutConfirm from './components/SignOutConfirm';
 import { loadBool, saveBool, loadStringArray, saveStringArray, loadNumber, saveNumber, saveAuthUser, clearAuthUser, loadAuthUser, type AuthUser, PROVIDER_LABELS } from './lib/storage';
 import { WIDGET_IDS, type WidgetId } from './components/DesktopWidgets';
@@ -187,10 +187,11 @@ export default function App() {
     // { id: 'certifications', label: 'Certifications', icon: CertificateIcon, kind: 'placeholder' },
     // Portfolio — ProjectsApp (APP_BODIES['projects'] in AppWindow.tsx) was
     // already fully built (live GitHub repos with homepages, fetched via
-    // github-projects.ts) but had no dock entry at all; MacFolderIcon was
-    // likewise already defined in MacIcons.tsx but unused. Re-enabled per
-    // request in place of Certifications.
-    { id: 'projects', label: 'Portfolio', icon: MacFolderIcon, kind: 'placeholder' },
+    // github-projects.ts) but had no dock entry at all. Re-enabled per
+    // request in place of Certifications; icon is TuxedoIcon (own comment
+    // in MacIcons.tsx), swapped in from the plain folder glyph per a later
+    // explicit request.
+    { id: 'projects', label: 'Portfolio', icon: TuxedoIcon, kind: 'placeholder' },
     { id: 'spotify', label: 'Spotify', icon: SpotifyIcon, kind: 'placeholder' },
     {
       id: 'email',

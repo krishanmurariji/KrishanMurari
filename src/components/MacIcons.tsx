@@ -118,6 +118,33 @@ export const MessagesIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+// Dock tile for the Portfolio app (ProjectsApp.tsx) — a tuxedo/black-tie
+// glyph (white shirt front + bow tie on a black ground) per explicit
+// request, swapped in for the plain folder icon. Hand-built from scratch
+// in the same flat, few-shape style as every icon above rather than using
+// the reference image pasted in chat (a detailed raster sticker, not a
+// scalable/reliable asset for a dock tile that gets rendered at a range of
+// sizes) — the "lapels" read purely as negative space where the black
+// background shows around the white shirt triangle, the same way the real
+// reference image reads at dock-icon size once its own fabric shading is
+// lost.
+export const TuxedoIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <defs>
+      <linearGradient id="tuxBg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="#3a3a3e" />
+        <stop offset="100%" stopColor="#0c0c0e" />
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="22" fill="url(#tuxBg)" />
+    <path d="M50 28 L29 90 H71 Z" fill="#FFFFFF" />
+    <path d="M50 35 L39 26 L39 41 Z M50 35 L61 26 L61 41 Z" fill="#101012" />
+    <rect x="45.5" y="32" width="9" height="7" rx="1.5" fill="#101012" />
+    <circle cx="50" cy="61" r="2.8" fill="#101012" />
+    <circle cx="50" cy="75" r="2.8" fill="#101012" />
+  </svg>
+);
+
 export const ExperienceIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" {...props}>
     <defs>

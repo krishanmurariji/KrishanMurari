@@ -15,7 +15,7 @@ import MenuBar from './components/MenuBar';
 import DesktopWidgets from './components/DesktopWidgets';
 import ChatAssistant from './components/ChatAssistant';
 // import { SmoothCursor } from './components/ui/smooth-cursor'; // disabled per request — keeping the component around in case it's wanted back later
-import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon, MessagesIcon } from './components/MacIcons';
+import { FinderIcon, MacMailIcon, CertificateIcon, ExperienceIcon, SpotifyIcon, MessagesIcon, MacFolderIcon } from './components/MacIcons';
 import SignOutConfirm from './components/SignOutConfirm';
 import { loadBool, saveBool, loadStringArray, saveStringArray, loadNumber, saveNumber, saveAuthUser, clearAuthUser, loadAuthUser, type AuthUser, PROVIDER_LABELS } from './lib/storage';
 import { WIDGET_IDS, type WidgetId } from './components/DesktopWidgets';
@@ -182,7 +182,15 @@ export default function App() {
     // Commented out per request — leaving ExperienceIcon's import and
     // ExperienceApp wired elsewhere alone so this is a one-line restore.
     // { id: 'experience', label: 'Experience', icon: ExperienceIcon, kind: 'placeholder' },
-    { id: 'certifications', label: 'Certifications', icon: CertificateIcon, kind: 'placeholder' },
+    // Commented out per request — CertificationsApp and CertificateIcon's
+    // import stay wired elsewhere, so this is a one-line restore too.
+    // { id: 'certifications', label: 'Certifications', icon: CertificateIcon, kind: 'placeholder' },
+    // Portfolio — ProjectsApp (APP_BODIES['projects'] in AppWindow.tsx) was
+    // already fully built (live GitHub repos with homepages, fetched via
+    // github-projects.ts) but had no dock entry at all; MacFolderIcon was
+    // likewise already defined in MacIcons.tsx but unused. Re-enabled per
+    // request in place of Certifications.
+    { id: 'projects', label: 'Portfolio', icon: MacFolderIcon, kind: 'placeholder' },
     { id: 'spotify', label: 'Spotify', icon: SpotifyIcon, kind: 'placeholder' },
     {
       id: 'email',

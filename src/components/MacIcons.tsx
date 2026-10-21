@@ -124,7 +124,11 @@ export const MessagesIcon = (props: SVGProps<SVGSVGElement>) => (
 // used to be. Twemoji's "person in tuxedo" (U+1F935) — jdecked/twemoji
 // (the actively-maintained fork of Twitter's original set), graphics
 // licensed CC-BY 4.0, free for commercial use with attribution:
-// github.com/jdecked/twemoji, assets/svg/1f935.svg.
+// github.com/jdecked/twemoji, assets/svg/1f935.svg. The saved copy in
+// public/icons/tuxedo.svg is that same source with the head (hair/face/
+// eyes/mouth paths) deleted and the viewBox re-cropped to the remaining
+// neck-down content — per explicit "no face" request — rather than the
+// full character portrait.
 export const TuxedoIcon = ({ className, style }: { className?: string; style?: CSSProperties }) => (
   <img src="/icons/tuxedo.svg" alt="" className={className} style={style} />
 );

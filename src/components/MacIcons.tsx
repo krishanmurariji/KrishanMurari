@@ -118,19 +118,19 @@ export const MessagesIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-// Dock tile for the Portfolio app (ProjectsApp.tsx) — same "real downloaded
-// icon, not hand-drawn" treatment as FinderIcon above, per explicit
-// request to match that pattern rather than keep the hand-built SVG this
-// used to be. Twemoji's "person in tuxedo" (U+1F935) — jdecked/twemoji
-// (the actively-maintained fork of Twitter's original set), graphics
-// licensed CC-BY 4.0, free for commercial use with attribution:
-// github.com/jdecked/twemoji, assets/svg/1f935.svg. The saved copy in
-// public/icons/tuxedo.svg is that same source with the head (hair/face/
-// eyes/mouth paths) deleted and the viewBox re-cropped to the remaining
-// neck-down content — per explicit "no face" request — rather than the
-// full character portrait.
+// Dock tile for the Portfolio app (ProjectsApp.tsx) — a specific reference
+// image supplied directly in chat (a polished, photo-realistic tuxedo
+// app-icon mockup — white pinstripe shirt, shaded satin lapels, a glossy
+// bow tie), not sourced from Twemoji/icon-icons.com/any attributable
+// library the way every other icon here is. Its origin/license are
+// unknown; flagged to the user rather than silently assumed safe for a
+// live public site. public/icons/tuxedo.png is that image with its white
+// page background flood-filled to transparent and cropped to the
+// resulting squircle's own bounding box (see this component's own git
+// history for the removal script) — the rounded-square icon card itself
+// is left exactly as supplied, including its own baked-in background.
 export const TuxedoIcon = ({ className, style }: { className?: string; style?: CSSProperties }) => (
-  <img src="/icons/tuxedo.svg" alt="" className={className} style={style} />
+  <img src="/icons/tuxedo.png" alt="" className={className} style={style} />
 );
 
 export const ExperienceIcon = (props: SVGProps<SVGSVGElement>) => (

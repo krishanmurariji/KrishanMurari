@@ -24,19 +24,6 @@ import { NAME, ABOUT_ME, AVATAR_URL, GITHUB_HANDLE } from './shared';
 // permanent "star this repo" watermark baked into the image.
 const CONTRIB_GRAPH_URL = `https://ghchart.rshah.org/${GITHUB_HANDLE}`;
 
-// The real, official GitHub achievement medals (Pull Shark, Galaxy Brain,
-// …) — not a hand-picked/guessed list, and not github-profile-trophy's
-// computed stat trophies (the earlier cut here), which turned out not to be
-// what was asked for and whose hosted endpoint is dead anyway (it now
-// returns HTTP 402 Payment Required — confirmed from a real workflow run,
-// not a guess). This file is rendered by lowlighter/metrics's achievements
-// plugin — a GitHub Action that queries GitHub directly with its own token,
-// no third-party live endpoint involved — and committed into public/ by
-// .github/workflows/update-github-achievements.yml on a schedule, so the
-// site only ever serves its own static asset: if a scheduled run ever
-// fails, the previously-committed SVG just stays as-is rather than the page
-// showing a broken image.
-const ACHIEVEMENTS_SVG = '/github-achievements.svg';
 
 const INTRO_MS = 3000;
 
@@ -242,10 +229,6 @@ function IconGridTile({ heading, items, index, isLight }: { heading: string; ite
 function HeroTile({ isLight }: { isLight: boolean }) {
   const nameColor = isLight ? '#3a3a3e' : '#f4f3f7';
   const nameShine = isLight ? '#ffffff' : '#9a9aa5';
-  // Mirrors PhotoCard's own failedUrls pattern below: if the badge service
-  // ever goes down again, hide it instead of leaving a broken-image icon
-  // pinned to the avatar.
-  const [badgeFailed, setBadgeFailed] = useState(false);
   return (
     <motion.div
       className={`${tileClass(isLight)} relative col-span-2 flex flex-col items-center @[900px]:col-span-3`}
@@ -283,32 +266,11 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             <ShinyText text="KRISHAN" color={nameColor} shineColor={nameShine} speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
             <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
           </div>
-          <div className="relative shrink-0">
-            <img
-              src={AVATAR_URL}
-              alt={NAME}
-              className={`h-20 w-20 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
-            />
-            {/* Real GitHub achievement medals, pinned to the avatar's own
-                edge like a status-dot badge rather than sitting inline in
-                the page flow — see ACHIEVEMENTS_SVG's own comment for why
-                this is a locally-committed static asset rather than a live
-                third-party fetch. The generated badge assumes a light
-                backing (dark text/icons), so this chip stays white in both
-                themes rather than trying to flip it dark — same call as the
-                lock screen's own provider-button artwork. Hidden on error
-                instead of showing a broken-image icon on the rare chance the
-                file is ever missing (e.g. the very first deploy, before the
-                generating workflow has run once). */}
-            {!badgeFailed && (
-              <img
-                src={ACHIEVEMENTS_SVG}
-                alt={`${GITHUB_HANDLE}'s GitHub achievements`}
-                onError={() => setBadgeFailed(true)}
-                className="absolute -bottom-2 -right-2 h-9 w-auto rounded-lg bg-white object-contain shadow-md ring-2 ring-white sm:-bottom-3 sm:-right-3 sm:h-12"
-              />
-            )}
-          </div>
+          <img
+            src={AVATAR_URL}
+            alt={NAME}
+            className={`h-20 w-20 shrink-0 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
+          />
           <div className="flex flex-col items-center gap-2">
             <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
             <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />

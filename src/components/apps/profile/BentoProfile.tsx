@@ -24,27 +24,21 @@ import { NAME, ABOUT_ME, AVATAR_URL, GITHUB_HANDLE } from './shared';
 // permanent "star this repo" watermark baked into the image.
 const CONTRIB_GRAPH_URL = `https://ghchart.rshah.org/${GITHUB_HANDLE}`;
 
-// First try here was ryo-ma/github-profile-trophy (github-profile-trophy
-// .vercel.app) — real, live trophies computed from actual account stats,
-// same idea as the official (but unverifiable — no public, unauthenticated
-// endpoint) GitHub achievement medals. It shipped as a broken image on the
-// live site: that project's own README flags rising hosting costs
-// threatening the hosted endpoint, and its issue tracker has multiple 2026
-// reports of the same hosted URL 403ing or not rendering. shields.io is the
-// opposite of that — a long-established, extremely high-traffic badge
-// service millions of GitHub READMEs already depend on — so the live-stat
-// badge is now a shields.io GitHub-followers badge instead: still real
-// account data, just from infrastructure that isn't at risk of vanishing.
-function githubBadgeUrl(isLight: boolean): string {
-  const params = new URLSearchParams({
-    label: 'followers',
-    style: 'flat',
-    logo: 'github',
-    color: '2ea44f',
-    labelColor: isLight ? 'ffffff' : '1c1c1e',
-  });
-  return `https://img.shields.io/github/followers/${GITHUB_HANDLE}?${params.toString()}`;
-}
+// ryo-ma/github-profile-trophy — real, live-computed GitHub achievement
+// trophies (Stars, Commits, Followers, PRs, etc.), not the official GitHub
+// profile achievement medals (Pull Shark, Galaxy Brain, …), which have no
+// public, unauthenticated image endpoint to pull a genuinely-earned list
+// from. First cut loaded github-profile-trophy.vercel.app live, at page-load
+// time — that endpoint is unreliable (its own README flags hosting-cost
+// risk, and its issue tracker has multiple 2026 reports of it 403ing or not
+// rendering), which is exactly what showed up as a broken image on the live
+// site. These two filenames are instead fetched from that same endpoint on
+// a schedule and committed straight into public/ by
+// .github/workflows/update-github-trophy.yml, so the site only ever serves
+// its own static asset: if a scheduled fetch fails because the endpoint is
+// down that day, the previously-committed SVG just stays as-is rather than
+// the page showing a broken image.
+const TROPHY_SVG = { light: '/github-trophy-light.svg', dark: '/github-trophy-dark.svg' };
 
 const INTRO_MS = 3000;
 
@@ -297,19 +291,19 @@ function HeroTile({ isLight }: { isLight: boolean }) {
               alt={NAME}
               className={`h-20 w-20 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
             />
-            {/* Live GitHub badge, pinned to the avatar's own edge like a
-                status-dot badge rather than sitting inline in the page
-                flow — see githubBadgeUrl's own comment for why this is a
-                shields.io stat badge, not the official (unverifiable)
-                GitHub achievement medals. Hidden on error instead of
-                showing a broken-image icon if the badge service is ever
-                unreachable. */}
+            {/* GitHub achievement trophies, pinned to the avatar's own edge
+                like a status-dot badge rather than sitting inline in the
+                page flow — see TROPHY_SVG's own comment for why this is a
+                locally-committed static asset rather than a live third-party
+                fetch. Hidden on error instead of showing a broken-image icon
+                on the rare chance the file is ever missing (e.g. the very
+                first deploy, before the generating workflow has run once). */}
             {!badgeFailed && (
               <img
-                src={githubBadgeUrl(isLight)}
-                alt={`${GITHUB_HANDLE}'s GitHub followers`}
+                src={isLight ? TROPHY_SVG.light : TROPHY_SVG.dark}
+                alt={`${GITHUB_HANDLE}'s GitHub achievement trophies`}
                 onError={() => setBadgeFailed(true)}
-                className={`absolute -bottom-2 -right-2 h-5 w-auto rounded-full object-contain shadow-md ring-2 sm:-bottom-3 sm:-right-3 sm:h-6 ${
+                className={`absolute -bottom-2 -right-2 h-9 w-auto rounded-lg object-contain shadow-md ring-2 sm:-bottom-3 sm:-right-3 sm:h-12 ${
                   isLight ? 'bg-white ring-white' : 'bg-[#1c1c1e] ring-[#1c1c1e]'
                 }`}
               />

@@ -24,34 +24,6 @@ import { NAME, ABOUT_ME, AVATAR_URL, GITHUB_HANDLE } from './shared';
 // permanent "star this repo" watermark baked into the image.
 const CONTRIB_GRAPH_URL = `https://ghchart.rshah.org/${GITHUB_HANDLE}`;
 
-// DenverCoder1/github-readme-streak-stats — a real, no-auth, embeddable-
-// image stat card (same category of service as the contribution chart
-// above) covering exactly "total contributions" and "consistency": Total
-// Contributions, Current Streak, and Longest Streak in one image. Colors
-// are passed explicitly as hex params (not the service's own theme=
-// presets) so the card matches this tile's own isLight palette exactly —
-// the indigo ring color is the same accent already used for this tile's
-// own dot-grid background a few lines down.
-function streakStatsUrl(isLight: boolean): string {
-  const text = isLight ? '1c1c1e' : 'f4f3f7';
-  const muted = isLight ? '6b6b70' : '9a9aa5';
-  const params = new URLSearchParams({
-    user: GITHUB_HANDLE,
-    background: '00000000',
-    border: '00000000',
-    stroke: '00000000',
-    hide_border: 'true',
-    ring: '6366f1',
-    fire: 'fb8c00',
-    currStreakNum: text,
-    sideNums: text,
-    currStreakLabel: text,
-    sideLabels: muted,
-    dates: muted,
-  });
-  return `https://streak-stats.demolab.com/?${params.toString()}`;
-}
-
 const INTRO_MS = 3000;
 
 function tileClass(isLight: boolean) {
@@ -302,25 +274,6 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
             <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
           </div>
-        </div>
-        {/* GitHub highlights — fills the gap between the name and the About
-            paragraph with real, live stats instead of leaving it empty:
-            the streak card (total contributions + current/longest streak)
-            and a followers count, both real embeddable images (no API
-            key, same pattern as the contribution calendar above), not
-            invented numbers. */}
-        <div className="flex w-full flex-col items-center gap-2">
-          <img
-            src={streakStatsUrl(isLight)}
-            alt={`${GITHUB_HANDLE}'s GitHub contribution streak`}
-            className="w-full max-w-sm"
-            style={{ aspectRatio: '495 / 195' }}
-          />
-          <img
-            src={`https://img.shields.io/github/followers/${GITHUB_HANDLE}?style=flat-square&label=Followers&color=6366f1`}
-            alt={`${GITHUB_HANDLE}'s GitHub follower count`}
-            className="h-5"
-          />
         </div>
         {/* No max-w cap — the previous max-w-xl held the paragraph to
             576px regardless of how wide the card actually was, leaving

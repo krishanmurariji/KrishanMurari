@@ -24,23 +24,26 @@ import { NAME, ABOUT_ME, AVATAR_URL, GITHUB_HANDLE } from './shared';
 // permanent "star this repo" watermark baked into the image.
 const CONTRIB_GRAPH_URL = `https://ghchart.rshah.org/${GITHUB_HANDLE}`;
 
-// ryo-ma/github-profile-trophy — real, live GitHub achievement trophies
-// (Stars, Commits, Followers, PRs, etc.) computed from actual account
-// stats, not a hand-picked/guessed list of the official GitHub profile
-// achievement medals (Pull Shark, Galaxy Brain, …) — those have no public,
-// unauthenticated image endpoint, so there'd be no reliable way to know
-// which ones are genuinely earned. Same "real embeddable image, no auth"
-// category of service as the contribution calendar above.
-function trophyUrl(isLight: boolean): string {
+// First try here was ryo-ma/github-profile-trophy (github-profile-trophy
+// .vercel.app) — real, live trophies computed from actual account stats,
+// same idea as the official (but unverifiable — no public, unauthenticated
+// endpoint) GitHub achievement medals. It shipped as a broken image on the
+// live site: that project's own README flags rising hosting costs
+// threatening the hosted endpoint, and its issue tracker has multiple 2026
+// reports of the same hosted URL 403ing or not rendering. shields.io is the
+// opposite of that — a long-established, extremely high-traffic badge
+// service millions of GitHub READMEs already depend on — so the live-stat
+// badge is now a shields.io GitHub-followers badge instead: still real
+// account data, just from infrastructure that isn't at risk of vanishing.
+function githubBadgeUrl(isLight: boolean): string {
   const params = new URLSearchParams({
-    username: GITHUB_HANDLE,
-    theme: isLight ? 'flat' : 'onedark',
-    column: '3',
-    row: '2',
-    'no-frame': 'true',
-    'no-bg': 'true',
+    label: 'followers',
+    style: 'flat',
+    logo: 'github',
+    color: '2ea44f',
+    labelColor: isLight ? 'ffffff' : '1c1c1e',
   });
-  return `https://github-profile-trophy.vercel.app/?${params.toString()}`;
+  return `https://img.shields.io/github/followers/${GITHUB_HANDLE}?${params.toString()}`;
 }
 
 const INTRO_MS = 3000;
@@ -247,6 +250,10 @@ function IconGridTile({ heading, items, index, isLight }: { heading: string; ite
 function HeroTile({ isLight }: { isLight: boolean }) {
   const nameColor = isLight ? '#3a3a3e' : '#f4f3f7';
   const nameShine = isLight ? '#ffffff' : '#9a9aa5';
+  // Mirrors PhotoCard's own failedUrls pattern below: if the badge service
+  // ever goes down again, hide it instead of leaving a broken-image icon
+  // pinned to the avatar.
+  const [badgeFailed, setBadgeFailed] = useState(false);
   return (
     <motion.div
       className={`${tileClass(isLight)} relative col-span-2 flex flex-col items-center @[900px]:col-span-3`}
@@ -290,18 +297,23 @@ function HeroTile({ isLight }: { isLight: boolean }) {
               alt={NAME}
               className={`h-20 w-20 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
             />
-            {/* GitHub achievement trophies, pinned to the avatar's own edge
-                like a status-dot badge rather than sitting inline in the
-                page flow — see trophyUrl's own comment for why these are
-                live stat trophies, not the official (unverifiable) GitHub
-                achievement medals. */}
-            <img
-              src={trophyUrl(isLight)}
-              alt={`${GITHUB_HANDLE}'s GitHub achievement trophies`}
-              className={`absolute -bottom-2 -right-2 h-9 w-auto rounded-lg object-contain shadow-md ring-2 sm:-bottom-3 sm:-right-3 sm:h-12 ${
-                isLight ? 'bg-white ring-white' : 'bg-[#1c1c1e] ring-[#1c1c1e]'
-              }`}
-            />
+            {/* Live GitHub badge, pinned to the avatar's own edge like a
+                status-dot badge rather than sitting inline in the page
+                flow — see githubBadgeUrl's own comment for why this is a
+                shields.io stat badge, not the official (unverifiable)
+                GitHub achievement medals. Hidden on error instead of
+                showing a broken-image icon if the badge service is ever
+                unreachable. */}
+            {!badgeFailed && (
+              <img
+                src={githubBadgeUrl(isLight)}
+                alt={`${GITHUB_HANDLE}'s GitHub followers`}
+                onError={() => setBadgeFailed(true)}
+                className={`absolute -bottom-2 -right-2 h-5 w-auto rounded-full object-contain shadow-md ring-2 sm:-bottom-3 sm:-right-3 sm:h-6 ${
+                  isLight ? 'bg-white ring-white' : 'bg-[#1c1c1e] ring-[#1c1c1e]'
+                }`}
+              />
+            )}
           </div>
           <div className="flex flex-col items-center gap-2">
             <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />

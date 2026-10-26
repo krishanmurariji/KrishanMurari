@@ -24,6 +24,25 @@ import { NAME, ABOUT_ME, AVATAR_URL, GITHUB_HANDLE } from './shared';
 // permanent "star this repo" watermark baked into the image.
 const CONTRIB_GRAPH_URL = `https://ghchart.rshah.org/${GITHUB_HANDLE}`;
 
+// ryo-ma/github-profile-trophy — real, live GitHub achievement trophies
+// (Stars, Commits, Followers, PRs, etc.) computed from actual account
+// stats, not a hand-picked/guessed list of the official GitHub profile
+// achievement medals (Pull Shark, Galaxy Brain, …) — those have no public,
+// unauthenticated image endpoint, so there'd be no reliable way to know
+// which ones are genuinely earned. Same "real embeddable image, no auth"
+// category of service as the contribution calendar above.
+function trophyUrl(isLight: boolean): string {
+  const params = new URLSearchParams({
+    username: GITHUB_HANDLE,
+    theme: isLight ? 'flat' : 'onedark',
+    column: '3',
+    row: '2',
+    'no-frame': 'true',
+    'no-bg': 'true',
+  });
+  return `https://github-profile-trophy.vercel.app/?${params.toString()}`;
+}
+
 const INTRO_MS = 3000;
 
 function tileClass(isLight: boolean) {
@@ -265,11 +284,25 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             <ShinyText text="KRISHAN" color={nameColor} shineColor={nameShine} speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
             <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
           </div>
-          <img
-            src={AVATAR_URL}
-            alt={NAME}
-            className={`h-20 w-20 shrink-0 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
-          />
+          <div className="relative shrink-0">
+            <img
+              src={AVATAR_URL}
+              alt={NAME}
+              className={`h-20 w-20 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
+            />
+            {/* GitHub achievement trophies, pinned to the avatar's own edge
+                like a status-dot badge rather than sitting inline in the
+                page flow — see trophyUrl's own comment for why these are
+                live stat trophies, not the official (unverifiable) GitHub
+                achievement medals. */}
+            <img
+              src={trophyUrl(isLight)}
+              alt={`${GITHUB_HANDLE}'s GitHub achievement trophies`}
+              className={`absolute -bottom-2 -right-2 h-9 w-auto rounded-lg object-contain shadow-md ring-2 sm:-bottom-3 sm:-right-3 sm:h-12 ${
+                isLight ? 'bg-white ring-white' : 'bg-[#1c1c1e] ring-[#1c1c1e]'
+              }`}
+            />
+          </div>
           <div className="flex flex-col items-center gap-2">
             <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
             <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />

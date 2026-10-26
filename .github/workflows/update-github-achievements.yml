@@ -9,13 +9,17 @@ name: Update GitHub achievements badge
 # official GitHub achievement medals (Pull Shark, Galaxy Brain, etc.) that
 # the account has actually earned. It runs self-hosted, as a GitHub Action
 # that queries GitHub directly with the workflow's own token — there's no
-# third-party live endpoint in the loop at all — and commits the rendered
-# SVG into public/, so the site only ever serves its own static asset. If a
-# run ever fails, the previously-committed SVG just stays as-is instead of
-# the page showing a broken image.
+# third-party live endpoint in the loop at all.
+#
+# CURRENTLY DISABLED (schedule removed, workflow_dispatch only): the
+# achievements plugin in the pinned version below still queries GitHub's
+# deprecated Classic Projects API, which GitHub has removed — the query
+# 404s, the plugin renders an error-only SVG instead of real achievements,
+# and the action's own built-in committer pushes that straight to the repo
+# root regardless of this workflow's own commit step. Leaving this disabled
+# until that's fixed upstream (or this workflow is reworked) rather than
+# auto-failing weekly.
 on:
-  schedule:
-    - cron: '0 6 * * 1'
   workflow_dispatch: {}
 
 permissions:

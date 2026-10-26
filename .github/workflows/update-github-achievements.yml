@@ -1,0 +1,54 @@
+name: Update GitHub achievements badge
+
+# The avatar-corner badge first tried github-profile-trophy.vercel.app's
+# *computed stat trophies* — real GitHub data, but not the actual achievement
+# medals the user asked for, and that hosted endpoint turned out to be dead
+# (it now returns HTTP 402 Payment Required — confirmed from this workflow's
+# own failed run, not just a guess). This workflow instead uses
+# lowlighter/metrics's "achievements" plugin, which renders the real,
+# official GitHub achievement medals (Pull Shark, Galaxy Brain, etc.) that
+# the account has actually earned. It runs self-hosted, as a GitHub Action
+# that queries GitHub directly with the workflow's own token — there's no
+# third-party live endpoint in the loop at all — and commits the rendered
+# SVG into public/, so the site only ever serves its own static asset. If a
+# run ever fails, the previously-committed SVG just stays as-is instead of
+# the page showing a broken image.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-achievements:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render achievements badge
+        # Pinned to a specific commit (tag v3.34) rather than @latest — this
+        # step runs with contents: write, so it shouldn't track a mutable tag.
+        uses: lowlighter/metrics@65836723097537a54cd8eb90f61839426b4266b6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          user: krishanmurariji
+          base: ''
+          filename: github-achievements.svg
+          plugin_achievements: yes
+          plugin_achievements_display: compact
+          plugin_achievements_limit: 6
+          plugin_achievements_threshold: C
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p public
+          mv github-achievements.svg public/github-achievements.svg
+          git add public/github-achievements.svg
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: refresh GitHub achievements badge"
+            git push
+          fi

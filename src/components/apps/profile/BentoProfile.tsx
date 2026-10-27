@@ -525,15 +525,36 @@ function HeroTile({ isLight }: { isLight: boolean }) {
                   no "Pro plan" field at all (that's account-private info, only
                   visible to the signed-in owner), so there's nothing to fetch
                   here — this is a plain assertion, same as any other fact on
-                  this page. */}
+                  this page. Positioned by percentage + translate, not a
+                  corner offset (-bottom-X -right-X): the avatar is a circle,
+                  so a corner-relative offset sits in the square bounding
+                  box's corner — outside the circle's actual curve, reading
+                  as "floating off the edge" instead of straddling it. 85% on
+                  each axis is where a 45° line from the circle's center
+                  meets its edge, so the badge's own center lands almost
+                  exactly on the ring. */}
               <span
-                className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white sm:h-7 sm:w-7"
-                style={{ background: '#1d9bf0' }}
+                className="absolute top-[85%] left-[85%] flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-lg ring-2 ring-white sm:h-7 sm:w-7"
+                style={{ background: 'linear-gradient(150deg, #6cd0ff 0%, #1d9bf0 55%, #0a66c2 100%)' }}
                 title="GitHub Pro"
                 aria-label="GitHub Pro account"
               >
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                {/* Glossy top highlight — flat single-color read as cheap;
+                    this plus the gradient above gives it some depth. */}
+                <span
+                  className="pointer-events-none absolute inset-0 rounded-full"
+                  style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0.5), rgba(255,255,255,0) 60%)' }}
+                  aria-hidden
+                />
+                <svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M5 13l4 4L19 7"
+                    stroke="#fff"
+                    strokeWidth="2.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.25))' }}
+                  />
                 </svg>
               </span>
             </div>

@@ -13,12 +13,21 @@ USER="krishanmurariji"
 API="https://api.github.com"
 
 gh_get() {
-  curl -fsSL \
+  local url="$1" response http_code body
+  response=$(curl -sS -w '\n%{http_code}' \
     -H "Authorization: Bearer ${GH_TOKEN}" \
     -H "Accept: application/vnd.github+json" \
     -H "User-Agent: krishan-portfolio-stats-bot" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
-    "$1"
+    "$url")
+  http_code="${response##*$'\n'}"
+  body="${response%$'\n'"$http_code"}"
+  if [ "$http_code" -ge 400 ]; then
+    echo "GitHub API error ($http_code) for $url:" >&2
+    echo "$body" >&2
+    exit 1
+  fi
+  echo "$body"
 }
 
 user_json=$(gh_get "$API/users/$USER")
@@ -66,8 +75,8 @@ for lang in "${!lang_count[@]}"; do
   fi
 done
 
-prs_merged=$(gh_get "$API/search/issues?q=author:$USER+type:pr+is:merged" | jq '.total_count')
-issues_opened=$(gh_get "$API/search/issues?q=author:$USER+type:issue" | jq '.total_count')
+prs_merged=$(gh_get "$API/search/issues?q=author:$USER+is:pr+is:merged" | jq '.total_count')
+issues_opened=$(gh_get "$API/search/issues?q=author:$USER+is:issue" | jq '.total_count')
 
 # Open-source contributions to specific external projects: is-a-dev/register
 # (the free-subdomain registry this site's own krishan.is-a.dev domain comes
@@ -76,9 +85,9 @@ issues_opened=$(gh_get "$API/search/issues?q=author:$USER+type:issue" | jq '.tot
 # and the larger (real) count is kept rather than risking an undercount
 # from guessing wrong — `repo:` on a name that doesn't exist just yields 0
 # results, it doesn't error.
-isadev_prs=$(gh_get "$API/search/issues?q=repo:is-a-dev/register+author:$USER+type:pr+is:merged" | jq '.total_count')
-horilla_a=$(gh_get "$API/search/issues?q=repo:horilla-opensource/horilla+author:$USER+type:pr+is:merged" | jq '.total_count')
-horilla_b=$(gh_get "$API/search/issues?q=repo:horilla/horilla-hr+author:$USER+type:pr+is:merged" | jq '.total_count')
+isadev_prs=$(gh_get "$API/search/issues?q=repo:is-a-dev/register+author:$USER+is:pr+is:merged" | jq '.total_count')
+horilla_a=$(gh_get "$API/search/issues?q=repo:horilla-opensource/horilla+author:$USER+is:pr+is:merged" | jq '.total_count')
+horilla_b=$(gh_get "$API/search/issues?q=repo:horilla/horilla-hr+author:$USER+is:pr+is:merged" | jq '.total_count')
 horilla_prs=$(( horilla_a > horilla_b ? horilla_a : horilla_b ))
 open_source_prs=$(( isadev_prs + horilla_prs ))
 

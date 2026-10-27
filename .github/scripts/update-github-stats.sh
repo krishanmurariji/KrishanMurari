@@ -30,6 +30,23 @@ gh_get() {
   echo "$body"
 }
 
+# Unlike most qualifiers, a `repo:` qualifier naming a repo that doesn't
+# exist makes the whole Search API call 422 ("Validation Failed") rather
+# than just contributing zero matches — confirmed from a real failed run,
+# not assumed. So any repo name that's a guess (rather than a value this
+# script already knows exists, like $USER's own account) gets checked here
+# first, via the plain repo-info endpoint, which 404s cleanly instead.
+repo_exists() {
+  local status
+  status=$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer ${GH_TOKEN}" \
+    -H "Accept: application/vnd.github+json" \
+    -H "User-Agent: krishan-portfolio-stats-bot" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "$API/repos/$1")
+  [ "$status" = "200" ]
+}
+
 user_json=$(gh_get "$API/users/$USER")
 public_repos=$(echo "$user_json" | jq '.public_repos')
 followers=$(echo "$user_json" | jq '.followers')
@@ -80,15 +97,20 @@ issues_opened=$(gh_get "$API/search/issues?q=author:$USER+is:issue" | jq '.total
 
 # Open-source contributions to specific external projects: is-a-dev/register
 # (the free-subdomain registry this site's own krishan.is-a.dev domain comes
-# from) and Horilla's HRMS. The Horilla project's exact repo has shown up
-# under two different full names in different sources, so both are queried
-# and the larger (real) count is kept rather than risking an undercount
-# from guessing wrong — `repo:` on a name that doesn't exist just yields 0
-# results, it doesn't error.
+# from) and Horilla's HRMS. The Horilla project's exact repo name has shown
+# up under two different full names in different sources, and a confirmed
+# real run of this script already proved horilla-opensource/horilla is NOT
+# one of them (422 "resources do not exist"), so each candidate is checked
+# with repo_exists first rather than guessed into the search query directly.
 isadev_prs=$(gh_get "$API/search/issues?q=repo:is-a-dev/register+author:$USER+is:pr+is:merged" | jq '.total_count')
-horilla_a=$(gh_get "$API/search/issues?q=repo:horilla-opensource/horilla+author:$USER+is:pr+is:merged" | jq '.total_count')
-horilla_b=$(gh_get "$API/search/issues?q=repo:horilla/horilla-hr+author:$USER+is:pr+is:merged" | jq '.total_count')
-horilla_prs=$(( horilla_a > horilla_b ? horilla_a : horilla_b ))
+
+horilla_prs=0
+for horilla_repo in horilla-opensource/horilla horilla/horilla-hr; do
+  if repo_exists "$horilla_repo"; then
+    horilla_prs=$(gh_get "$API/search/issues?q=repo:$horilla_repo+author:$USER+is:pr+is:merged" | jq '.total_count')
+    break
+  fi
+done
 open_source_prs=$(( isadev_prs + horilla_prs ))
 
 mkdir -p public

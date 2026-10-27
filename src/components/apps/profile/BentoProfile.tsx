@@ -630,8 +630,16 @@ export default function BentoProfile({ isLight = true }: { isLight?: boolean }) 
                 changes). The threshold is a custom 900px, not Tailwind's
                 built-in @lg (512px) — @lg already sits below this grid's own
                 normal ~700px width, which would (and did) turn on the extra
-                column even at the ordinary window size. */}
-            <div className="mx-auto grid max-w-6xl grid-cols-2 gap-5 @[900px]:grid-cols-3">
+                column even at the ordinary window size. The max-width itself
+                was still only 6xl (1152px) though — on an actually wide
+                fullscreen window that left large empty margins either side
+                again, so it grows one step further past 1400px of room.
+                Column count stays at 3 regardless (not a further 4-column
+                tier): 6 icon tiles divide evenly into 3 columns as two full
+                rows, and wouldn't with 4; growing each card's own width a
+                bit is the better use of the extra room than an uneven
+                last row. */}
+            <div className="mx-auto grid max-w-6xl grid-cols-2 gap-5 @[900px]:grid-cols-3 @[1400px]:max-w-[1500px]">
               <HeroTile isLight={isLight} />
               <IconGridTile heading="Languages" items={LANGUAGE_ICONS} index={0} isLight={isLight} />
               <IconGridTile heading="Frameworks" items={FRAMEWORK_ICONS} index={1} isLight={isLight} />

@@ -170,7 +170,6 @@ function AchievementBadge({ achievement, isLight, visibilityClass }: { achieveme
     <motion.div
       title={achievement.tier > 1 ? `${name} x${achievement.tier}` : name}
       className={`group relative shrink-0 ${visibilityClass}`}
-      style={{ perspective: 400 }}
       whileHover={{ scale: 1.22, rotate: -6, y: -3 }}
       whileTap={{ scale: 1.05 }}
       transition={{ type: 'spring', stiffness: 320, damping: 14 }}
@@ -187,7 +186,6 @@ function AchievementBadge({ achievement, isLight, visibilityClass }: { achieveme
         alt={name}
         onError={() => setFailed(true)}
         className={`h-9 w-9 rounded-full object-cover shadow-md ring-2 sm:h-11 sm:w-11 ${isLight ? 'ring-white' : 'ring-white/20'}`}
-        style={{ filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.3))' }}
       />
       {achievement.tier > 1 && (
         <span
@@ -211,9 +209,29 @@ function AchievementBadge({ achievement, isLight, visibilityClass }: { achieveme
 // their contents. @[500px]/@[900px] match this card's own existing
 // container-query breakpoint (see its @[900px]:col-span-3 above) rather
 // than introducing a new one.
-function AchievementFlank({ isLight, achievements, side }: { isLight: boolean; achievements: GithubAchievement[]; side: 'left' | 'right' }) {
+function AchievementFlank({
+  isLight,
+  achievements,
+  side,
+  stat,
+}: {
+  isLight: boolean;
+  achievements: GithubAchievement[];
+  side: 'left' | 'right';
+  stat: { value: number; label: string; icon: ReactNode } | null;
+}) {
+  // Outermost item on each side (farthest from the name), so it's the
+  // first thing to go when space is tight and the last thing to appear
+  // once there's plenty — space-dependent now instead of always showing
+  // under the name, per explicit direction to treat it "same like badge".
+  const statEl = stat ? (
+    <div className="hidden @[1100px]:flex">
+      <NameStat isLight={isLight} value={stat.value} label={stat.label} icon={stat.icon} />
+    </div>
+  ) : null;
   return (
     <div className={`flex flex-1 items-center gap-2 sm:gap-3 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
+      {side === 'left' && statEl}
       {achievements.map((achievement, slot) => (
         <AchievementBadge
           key={achievement.slug}
@@ -222,6 +240,7 @@ function AchievementFlank({ isLight, achievements, side }: { isLight: boolean; a
           visibilityClass={slot === 0 ? 'hidden @[500px]:flex' : 'hidden @[900px]:flex'}
         />
       ))}
+      {side === 'right' && statEl}
     </div>
   );
 }
@@ -469,20 +488,26 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             text per explicit feedback that both felt too small. A thin
             fading rule sits under each half of the name, not one line
             spanning the whole row, since the photo floats above that line
-            rather than sitting on it. Real achievement medals now flank
-            this whole row instead of sitting in a separate strip below it
-            (that strip's flat background wasn't working, and it was
-            clipping the "x2" tier pill) — see AchievementFlank's own
-            comment for why the name block stays centered regardless of
-            how many medals actually show. Commits/open-source counts moved
-            under each name's own line for the same reason. */}
+            rather than sitting on it. Real achievement medals — and now
+            the commits/open-source counts too, per explicit follow-up
+            direction to treat them the same way — flank this whole row
+            instead of sitting in a separate strip below it (that strip's
+            flat background wasn't working, and it was clipping the "x2"
+            tier pill). See AchievementFlank's own comment for why the name
+            block stays centered regardless of how much of this actually
+            shows, and for why the stat sits outermost (the last thing to
+            appear as space opens up) rather than always-on like before. */}
         <div className="-mt-10 flex w-full items-center gap-2 sm:-mt-16 sm:gap-4">
-          <AchievementFlank isLight={isLight} achievements={leftAchievements} side="left" />
+          <AchievementFlank
+            isLight={isLight}
+            achievements={leftAchievements}
+            side="left"
+            stat={githubStats ? { value: githubStats.totalCommits, label: 'Commits', icon: <CommitGlyph className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> } : null}
+          />
           <div className="flex shrink-0 items-center gap-4 sm:gap-8">
             <div className="flex flex-col items-center gap-2">
               <ShinyText text="KRISHAN" color={nameColor} shineColor={nameShine} speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
               <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
-              {githubStats && <NameStat isLight={isLight} value={githubStats.totalCommits} label="Commits" icon={<CommitGlyph className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} />}
             </div>
             <div className="relative shrink-0">
               <img
@@ -511,12 +536,14 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             <div className="flex flex-col items-center gap-2">
               <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
               <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
-              {githubStats && (
-                <NameStat isLight={isLight} value={githubStats.openSourceContributions} label="Open Source" icon={<OpenSourceGlyph className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} />
-              )}
             </div>
           </div>
-          <AchievementFlank isLight={isLight} achievements={rightAchievements} side="right" />
+          <AchievementFlank
+            isLight={isLight}
+            achievements={rightAchievements}
+            side="right"
+            stat={githubStats ? { value: githubStats.openSourceContributions, label: 'Open Source', icon: <OpenSourceGlyph className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> } : null}
+          />
         </div>
         {/* No max-w cap — the previous max-w-xl held the paragraph to
             576px regardless of how wide the card actually was, leaving

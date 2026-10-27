@@ -229,13 +229,13 @@ function AchievementFlank({
       <NameStat isLight={isLight} value={stat.value} label={stat.label} icon={stat.icon} />
     </div>
   ) : null;
-  // Not flex-1 — that stretched each flank across the leftover width on a
-  // wide card, which (even with justify-end/-start) read as a gap between
-  // the badges and the name rather than a tight group. This hugs its own
-  // content instead; the parent row centers the whole cluster, so leftover
-  // width becomes outer margin on the card, not internal gaps.
+  // flex-1: each flank claims equal width and pushes its content toward
+  // the name via justify-end/-start, so the stat (outermost) lands near
+  // the card's true edge and the badges sit closer in — using the card's
+  // actual width instead of leaving it empty on either side of a
+  // tightly-clustered center, per a direct edited-screenshot comparison.
   return (
-    <div className={`flex items-center gap-2 sm:gap-3 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex flex-1 items-center gap-2 sm:gap-3 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
       {side === 'left' && statEl}
       {achievements.map((achievement, slot) => (
         <AchievementBadge
@@ -498,14 +498,10 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             direction to treat them the same way — flank this whole row
             instead of sitting in a separate strip below it (that strip's
             flat background wasn't working, and it was clipping the "x2"
-            tier pill). The whole cluster (stat, badges, name, avatar, name,
-            badges, stat) stays one tight group via this row's own
-            justify-center, rather than stretching flank-to-flank across
-            the card on a wide screen — that read as a gap between the
-            badges and the name instead of looking like one unit. See
-            AchievementFlank's own comment for why the stat sits outermost
-            (the last thing to appear as space opens up). */}
-        <div className="-mt-10 flex w-full items-center justify-center gap-2 sm:-mt-16 sm:gap-4">
+            tier pill). See AchievementFlank's own comment for why the
+            stat sits outermost, near the card's true edge, with the
+            badges between it and the name. */}
+        <div className="-mt-10 flex w-full items-center gap-2 sm:-mt-16 sm:gap-4">
           <AchievementFlank
             isLight={isLight}
             achievements={leftAchievements}

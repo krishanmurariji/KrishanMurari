@@ -103,78 +103,125 @@ function formatCount(value: number): string {
   return String(value);
 }
 
-// Left/right ends of the strip (total commits, open-source contributions) —
-// a bold count over a small caption, same compact footprint as the badge
-// chips in the center so the strip reads as one piece.
-function StripStat({ isLight, value, label, align }: { isLight: boolean; value: number; label: string; align: 'left' | 'right' }) {
+function CommitGlyph({ className }: { className?: string }) {
   return (
-    <div className={`flex shrink-0 flex-col ${align === 'left' ? 'items-start' : 'items-end'}`}>
-      <span className={`text-sm font-bold sm:text-base ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}>{formatCount(value)}+</span>
-      <span className={`text-[9px] leading-tight sm:text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>{label}</span>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <circle cx="12" cy="12" r="3.3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M2.5 12h6M15.5 12h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 
-// The center badge grid: the strip itself never wraps (it stays one thin
-// row), so "how many fit" is controlled with responsive visibility per
-// badge instead of flex-wrap — the first 4 always show, a 5th joins from
-// the sm breakpoint up, and the rest join from lg up, roughly matching
-// "4 or 5 on a small screen, 8 or 9 on a big one" without ever truncating
-// which badges exist, just how many are currently visible.
-// A single earned medal — its own failed-load state (mirrors PhotoCard's
-// failedUrls pattern in DesktopWidgets.tsx) so one bad image just vanishes
-// instead of leaving a broken-image icon in the strip; a small "x{tier}"
-// pill on the corner for anything earned more than once, same visual
-// language as GitHub's own achievements page.
+// A small branch/fork glyph — evokes a pull request landing in someone
+// else's repo, standing in for "open source contribution" the same way
+// CommitGlyph's dot-on-a-line stands in for a single commit.
+function OpenSourceGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <circle cx="6" cy="6" r="2.1" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="6" cy="18" r="2.1" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="18" cy="12" r="2.1" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M6 8.1V15.9M6 9c0 3.8 4.3 4.6 7.8 4.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Sits directly under each name's own fading rule now (commits under
+// KRISHAN, open-source contributions under MURARI) instead of in a
+// separate strip below the whole row — a boxed strip read as its own,
+// not-very-interesting UI element with a flat background; this reads as
+// part of the name itself. Reuses ShinyText for the number for the same
+// reason the names themselves do: it's the one shimmer treatment this
+// card already established, so a second big number nearby in a different
+// style would look like it belonged to a different design.
+function NameStat({ isLight, value, label, icon }: { isLight: boolean; value: number; label: string; icon: ReactNode }) {
+  const color = isLight ? '#3a3a3e' : '#f4f3f7';
+  const shine = isLight ? '#ffffff' : '#9a9aa5';
+  return (
+    <motion.div
+      className="flex flex-col items-center gap-0.5"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.5 }}
+    >
+      <div className={`flex items-center gap-1 ${isLight ? 'text-[#1c1c1e]/70' : 'text-white/70'}`}>
+        {icon}
+        <ShinyText text={`${formatCount(value)}+`} color={color} shineColor={shine} speed={2.4} className="text-base font-extrabold sm:text-xl" />
+      </div>
+      <span className={`text-[9px] font-semibold tracking-wider uppercase sm:text-[10px] ${isLight ? 'text-black/45' : 'text-white/45'}`}>{label}</span>
+    </motion.div>
+  );
+}
+
+// A single earned medal, now flanking the name row instead of sitting in a
+// boxed strip underneath it — which also fixes a real bug from that strip:
+// its own overflow-hidden (needed to keep the strip one thin row) was
+// clipping this badge's "x{tier}" corner pill whenever the badge sat near
+// the strip's bottom edge. No ancestor here clips, so the pill stays whole.
+// Own failed-load state (mirrors PhotoCard's failedUrls pattern in
+// DesktopWidgets.tsx) so one bad image just vanishes instead of leaving a
+// broken-image icon. The hover tilt+lift+glow is the "make it feel more
+// alive" interaction these medals were explicitly asked for.
 function AchievementBadge({ achievement, isLight, visibilityClass }: { achievement: GithubAchievement; isLight: boolean; visibilityClass: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   const name = titleCaseSlug(achievement.slug);
   return (
-    <div title={achievement.tier > 1 ? `${name} x${achievement.tier}` : name} className={`relative shrink-0 ${visibilityClass}`}>
+    <motion.div
+      title={achievement.tier > 1 ? `${name} x${achievement.tier}` : name}
+      className={`group relative shrink-0 ${visibilityClass}`}
+      style={{ perspective: 400 }}
+      whileHover={{ scale: 1.22, rotate: -6, y: -3 }}
+      whileTap={{ scale: 1.05 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 14 }}
+    >
+      {/* Soft halo behind the medal, invisible at rest and fading in on
+          hover — reads as a glow/pop rather than a flat icon swap. */}
+      <span
+        className="absolute inset-0 -z-10 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
+        style={{ background: isLight ? 'radial-gradient(circle, rgba(99,102,241,0.45), transparent 70%)' : 'radial-gradient(circle, rgba(167,139,250,0.55), transparent 70%)' }}
+        aria-hidden
+      />
       <img
         src={achievement.image}
         alt={name}
         onError={() => setFailed(true)}
-        className="h-8 w-8 rounded-full object-cover shadow-sm sm:h-9 sm:w-9"
+        className={`h-9 w-9 rounded-full object-cover shadow-md ring-2 sm:h-11 sm:w-11 ${isLight ? 'ring-white' : 'ring-white/20'}`}
+        style={{ filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.3))' }}
       />
       {achievement.tier > 1 && (
         <span
-          className={`absolute -bottom-1 -right-1 rounded-full px-1 text-[9px] font-bold leading-tight ${
-            isLight ? 'bg-[#1c1c1e] text-white' : 'bg-white text-[#1c1c1e]'
+          className={`absolute -bottom-1 -right-1 rounded-full px-1 py-px text-[9px] font-bold leading-tight shadow-sm ring-1 ${
+            isLight ? 'bg-[#1c1c1e] text-white ring-white' : 'bg-white text-[#1c1c1e] ring-[#1c1c1e]'
           }`}
         >
           x{achievement.tier}
         </span>
       )}
-    </div>
+    </motion.div>
   );
 }
 
-function GithubStatsStrip({
-  isLight,
-  stats,
-  achievements,
-}: {
-  isLight: boolean;
-  stats: GithubStats | null;
-  achievements: GithubAchievement[] | null;
-}) {
-  if (!stats) return null;
+// One flank of the name row: up to 2 real medals, closest badge to the
+// name first. Both flanks are equal-width flex-1 regions with their
+// content justified toward the center — so however many badges actually
+// render (0, 1, or 2 — a narrow card shows none at all, "no space, no
+// badge"), the KRISHAN/avatar/MURARI block in between stays visually
+// centered, since the two flanks always claim equal width regardless of
+// their contents. @[500px]/@[900px] match this card's own existing
+// container-query breakpoint (see its @[900px]:col-span-3 above) rather
+// than introducing a new one.
+function AchievementFlank({ isLight, achievements, side }: { isLight: boolean; achievements: GithubAchievement[]; side: 'left' | 'right' }) {
   return (
-    <div className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 sm:gap-4 sm:px-4 sm:py-2.5 ${isLight ? 'bg-black/[0.03]' : 'bg-white/[0.04]'}`}>
-      <StripStat isLight={isLight} value={stats.totalCommits} label="Commits" align="left" />
-      <div className="flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden sm:gap-2.5 lg:gap-3">
-        {(achievements ?? []).map((achievement, index) => (
-          <AchievementBadge
-            key={achievement.slug}
-            achievement={achievement}
-            isLight={isLight}
-            visibilityClass={index < 4 ? 'flex' : index === 4 ? 'hidden sm:flex' : 'hidden lg:flex'}
-          />
-        ))}
-      </div>
-      <StripStat isLight={isLight} value={stats.openSourceContributions} label="Open Source" align="right" />
+    <div className={`flex flex-1 items-center gap-2 sm:gap-3 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
+      {achievements.map((achievement, slot) => (
+        <AchievementBadge
+          key={achievement.slug}
+          achievement={achievement}
+          isLight={isLight}
+          visibilityClass={slot === 0 ? 'hidden @[500px]:flex' : 'hidden @[900px]:flex'}
+        />
+      ))}
     </div>
   );
 }
@@ -385,6 +432,12 @@ function HeroTile({ isLight }: { isLight: boolean }) {
   const nameShine = isLight ? '#ffffff' : '#9a9aa5';
   const githubStats = useGithubStats();
   const githubAchievements = useGithubAchievements();
+  // Alternate left/right rather than "first half left, second half right"
+  // so each flank gets a reasonably representative badge even at the
+  // 1-per-side tier, instead of the right flank staying empty until the
+  // 2-per-side tier kicks in.
+  const leftAchievements = (githubAchievements ?? []).filter((_, i) => i % 2 === 0);
+  const rightAchievements = (githubAchievements ?? []).filter((_, i) => i % 2 === 1);
   return (
     <motion.div
       className={`${tileClass(isLight)} relative col-span-2 flex flex-col items-center @[900px]:col-span-3`}
@@ -416,53 +469,55 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             text per explicit feedback that both felt too small. A thin
             fading rule sits under each half of the name, not one line
             spanning the whole row, since the photo floats above that line
-            rather than sitting on it. */}
-        <div className="-mt-10 flex items-center justify-center gap-4 sm:-mt-16 sm:gap-8">
-          <div className="flex flex-col items-center gap-2">
-            <ShinyText text="KRISHAN" color={nameColor} shineColor={nameShine} speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
-            <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
+            rather than sitting on it. Real achievement medals now flank
+            this whole row instead of sitting in a separate strip below it
+            (that strip's flat background wasn't working, and it was
+            clipping the "x2" tier pill) — see AchievementFlank's own
+            comment for why the name block stays centered regardless of
+            how many medals actually show. Commits/open-source counts moved
+            under each name's own line for the same reason. */}
+        <div className="-mt-10 flex w-full items-center gap-2 sm:-mt-16 sm:gap-4">
+          <AchievementFlank isLight={isLight} achievements={leftAchievements} side="left" />
+          <div className="flex shrink-0 items-center gap-4 sm:gap-8">
+            <div className="flex flex-col items-center gap-2">
+              <ShinyText text="KRISHAN" color={nameColor} shineColor={nameShine} speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
+              <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
+              {githubStats && <NameStat isLight={isLight} value={githubStats.totalCommits} label="Commits" icon={<CommitGlyph className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} />}
+            </div>
+            <div className="relative shrink-0">
+              <img
+                src={AVATAR_URL}
+                alt={NAME}
+                className={`h-20 w-20 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
+              />
+              {/* GitHub Pro indicator — a static, self-drawn verified-style
+                  checkmark (the same visual language as X/Twitter's blue
+                  check), not data pulled from GitHub: GitHub's public API has
+                  no "Pro plan" field at all (that's account-private info, only
+                  visible to the signed-in owner), so there's nothing to fetch
+                  here — this is a plain assertion, same as any other fact on
+                  this page. */}
+              <span
+                className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white sm:h-7 sm:w-7"
+                style={{ background: '#1d9bf0' }}
+                title="GitHub Pro"
+                aria-label="GitHub Pro account"
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
+              <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
+              {githubStats && (
+                <NameStat isLight={isLight} value={githubStats.openSourceContributions} label="Open Source" icon={<OpenSourceGlyph className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} />
+              )}
+            </div>
           </div>
-          <div className="relative shrink-0">
-            <img
-              src={AVATAR_URL}
-              alt={NAME}
-              className={`h-20 w-20 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
-            />
-            {/* GitHub Pro indicator — a static, self-drawn verified-style
-                checkmark (the same visual language as X/Twitter's blue
-                check), not data pulled from GitHub: GitHub's public API has
-                no "Pro plan" field at all (that's account-private info, only
-                visible to the signed-in owner), so there's nothing to fetch
-                here — this is a plain assertion, same as any other fact on
-                this page. */}
-            <span
-              className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white sm:h-7 sm:w-7"
-              style={{ background: '#1d9bf0' }}
-              title="GitHub Pro"
-              aria-label="GitHub Pro account"
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
-            <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
-          </div>
+          <AchievementFlank isLight={isLight} achievements={rightAchievements} side="right" />
         </div>
-        {/* Thin strip: total commits on the left, open-source contribution
-            count (is-a-dev/register + Horilla) on the right, the real
-            earned GitHub achievement medals in the center — see
-            GithubStatsStrip's own comment for how many of those are
-            actually visible at a given width. Renders nothing until the
-            generating workflow has committed public/github-stats.json at
-            least once, same "absent rather than broken" rule as everything
-            else GitHub-data related on this page; the achievement medals
-            themselves are independently optional on top of that (an empty
-            or not-yet-generated public/github-achievements.json just means
-            no medals show, not that the whole strip hides). */}
-        <GithubStatsStrip isLight={isLight} stats={githubStats} achievements={githubAchievements} />
         {/* No max-w cap — the previous max-w-xl held the paragraph to
             576px regardless of how wide the card actually was, leaving
             large empty gutters on either side once the card widened past

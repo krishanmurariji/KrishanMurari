@@ -8,3 +8,4 @@ coverage/
 !.env.example
 .claude/
 loader-check.mjs
+__pycache__/

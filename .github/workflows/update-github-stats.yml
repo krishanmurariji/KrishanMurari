@@ -1,9 +1,16 @@
 name: Update GitHub stats
 
-# Generates public/github-stats.json (total commits, stars, PRs merged,
-# open-source contributions, …) by calling GitHub's own REST + Search API
-# directly — see .github/scripts/update-github-stats.sh for why this
-# deliberately avoids any third-party badge/rendering service or Action.
+# Generates two static files, both consumed client-side by BentoProfile.tsx:
+#   - public/github-stats.json: total commits, stars, PRs merged, open-source
+#     contributions, … from GitHub's own REST + Search API directly (see
+#     .github/scripts/update-github-stats.sh for why this deliberately
+#     avoids any third-party badge/rendering service or Action).
+#   - public/github-achievements.json + public/achievements/*.png: the real,
+#     official GitHub achievement medals this account has actually earned
+#     (Pull Shark, YOLO, …), scraped from the public achievements page
+#     itself (see .github/scripts/fetch-github-achievements.py for why —
+#     short version: there is no API for this at all, official or
+#     third-party, so the public page is the only real source).
 on:
   workflow_dispatch: {}
   schedule:
@@ -23,12 +30,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/update-github-stats.sh
 
+      - name: Fetch real achievement badges
+        run: python3 .github/scripts/fetch-github-achievements.py
+
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/github-stats.json
+          git add public/github-stats.json public/github-achievements.json public/achievements
           if ! git diff --cached --quiet; then
-            git commit -m "chore: refresh GitHub stats"
+            git commit -m "chore: refresh GitHub stats and achievement badges"
             git push
           fi

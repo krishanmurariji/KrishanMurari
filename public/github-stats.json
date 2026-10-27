@@ -1,47 +1,5 @@
 {
-  "generatedAt": "2026-10-27T15:28:38Z",
+  "generatedAt": "2026-10-27T15:45:00Z",
   "totalCommits": 520,
-  "openSourceContributions": 5,
-  "badges": [
-    {
-      "key": "repos",
-      "label": "Public Repos",
-      "value": 28
-    },
-    {
-      "key": "followers",
-      "label": "Followers",
-      "value": 2
-    },
-    {
-      "key": "stars",
-      "label": "Stars Earned",
-      "value": 30
-    },
-    {
-      "key": "prs",
-      "label": "PRs Merged",
-      "value": 5
-    },
-    {
-      "key": "issues",
-      "label": "Issues Opened",
-      "value": 0
-    },
-    {
-      "key": "years",
-      "label": "Years on GitHub",
-      "value": "3+"
-    },
-    {
-      "key": "language",
-      "label": "Top Language",
-      "value": "TypeScript"
-    },
-    {
-      "key": "following",
-      "label": "Following",
-      "value": 0
-    }
-  ]
+  "openSourceContributions": 5
 }

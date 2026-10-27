@@ -1,0 +1,24 @@
+{
+  "achievements": [
+    {
+      "slug": "pull-shark",
+      "tier": 2,
+      "image": "/achievements/pull-shark.png"
+    },
+    {
+      "slug": "pair-extraordinaire",
+      "tier": 1,
+      "image": "/achievements/pair-extraordinaire.png"
+    },
+    {
+      "slug": "yolo",
+      "tier": 1,
+      "image": "/achievements/yolo.png"
+    },
+    {
+      "slug": "quickdraw",
+      "tier": 1,
+      "image": "/achievements/quickdraw.png"
+    }
+  ]
+}

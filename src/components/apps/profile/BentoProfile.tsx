@@ -24,6 +24,163 @@ import { NAME, ABOUT_ME, AVATAR_URL, GITHUB_HANDLE } from './shared';
 // permanent "star this repo" watermark baked into the image.
 const CONTRIB_GRAPH_URL = `https://ghchart.rshah.org/${GITHUB_HANDLE}`;
 
+// Real GitHub stats (commits, stars, PRs merged, open-source contributions
+// to is-a-dev/register and the Horilla HRMS repos, …), computed from
+// GitHub's own REST/Search API by .github/workflows/update-github-stats.yml
+// and committed to public/github-stats.json — not a third-party rendering
+// service. That workflow uses only the official actions/checkout plus curl
+// against api.github.com directly, after three different third-party
+// GitHub-badge services in a row turned out to be unreliable (a dead paid
+// endpoint, a wrong-fit followers badge, and an upstream plugin bug against
+// GitHub's now-removed Classic Projects API). Fetched client-side at
+// runtime rather than imported, since it's a generated static asset, not
+// source; absent entirely (not a broken placeholder) until that workflow
+// has run at least once.
+type GithubBadge = { key: string; label: string; value: string | number };
+type GithubStats = {
+  totalCommits: number;
+  openSourceContributions: number;
+  badges: GithubBadge[];
+};
+
+function useGithubStats(): GithubStats | null {
+  const [stats, setStats] = useState<GithubStats | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/github-stats.json')
+      .then((res) => (res.ok ? (res.json() as Promise<GithubStats>) : null))
+      .then((data) => {
+        if (!cancelled) setStats(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return stats;
+}
+
+// 1,234 -> "1.2k" — keeps the commit/star counts from blowing out the
+// strip's width once they grow past four digits.
+function formatCount(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
+  return String(value);
+}
+
+// One small stroke-based glyph per badge key, same convention as the
+// PinGlyph/MailGlyph icons in shared.tsx — compact enough to sit inside a
+// thin strip rather than a full card.
+function BadgeGlyph({ icon, className }: { icon: string; className?: string }) {
+  const common = { viewBox: '0 0 24 24', fill: 'none' as const, xmlns: 'http://www.w3.org/2000/svg', className };
+  switch (icon) {
+    case 'repos':
+      return (
+        <svg {...common}>
+          <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v10.5A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+          <path d="M15 3v5h5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'followers':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'following':
+      return (
+        <svg {...common}>
+          <circle cx="10" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M3.5 20c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M17.5 7.5v5M15 10h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'stars':
+      return (
+        <svg {...common}>
+          <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.8l-5.2 2.9 1-5.9-4.3-4.1 5.9-.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'prs':
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="6" r="1.8" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="7" cy="18" r="1.8" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="17" cy="14" r="1.8" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M7 7.8V16.2M7 7.8c0 5 4 6 8.2 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'issues':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M12 7.5v5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <circle cx="12" cy="16.3" r="0.9" fill="currentColor" />
+        </svg>
+      );
+    case 'years':
+      return (
+        <svg {...common}>
+          <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M4 9.5h16M8 3v3.5M16 3v3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'language':
+      return (
+        <svg {...common}>
+          <path d="M9 7.5 5 12l4 4.5M15 7.5l4 4.5-4 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" />
+        </svg>
+      );
+  }
+}
+
+// Left/right ends of the strip (total commits, open-source contributions) —
+// a bold count over a small caption, same compact footprint as the badge
+// chips in the center so the strip reads as one piece.
+function StripStat({ isLight, value, label, align }: { isLight: boolean; value: number; label: string; align: 'left' | 'right' }) {
+  return (
+    <div className={`flex shrink-0 flex-col ${align === 'left' ? 'items-start' : 'items-end'}`}>
+      <span className={`text-sm font-bold sm:text-base ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}>{formatCount(value)}+</span>
+      <span className={`text-[9px] leading-tight sm:text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>{label}</span>
+    </div>
+  );
+}
+
+// The center badge grid: the strip itself never wraps (it stays one thin
+// row), so "how many fit" is controlled with responsive visibility per
+// badge instead of flex-wrap — the first 4 always show, a 5th joins from
+// the sm breakpoint up, and the rest join from lg up, roughly matching
+// "4 or 5 on a small screen, 8 or 9 on a big one" without ever truncating
+// which badges exist, just how many are currently visible.
+function GithubStatsStrip({ isLight, stats }: { isLight: boolean; stats: GithubStats | null }) {
+  if (!stats) return null;
+  return (
+    <div className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 sm:gap-4 sm:px-4 sm:py-2.5 ${isLight ? 'bg-black/[0.03]' : 'bg-white/[0.04]'}`}>
+      <StripStat isLight={isLight} value={stats.totalCommits} label="Commits" align="left" />
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden sm:gap-2 lg:gap-2.5">
+        {stats.badges.map((badge, index) => (
+          <div
+            key={badge.key}
+            title={`${badge.label}: ${badge.value}`}
+            className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold sm:text-xs ${
+              isLight ? 'bg-white text-[#1c1c1e] ring-1 ring-black/5' : 'bg-white/10 text-white ring-1 ring-white/10'
+            } ${index < 4 ? 'flex' : index === 4 ? 'hidden sm:flex' : 'hidden lg:flex'}`}
+          >
+            <BadgeGlyph icon={badge.key} className="h-3.5 w-3.5 shrink-0" />
+            <span>{badge.value}</span>
+          </div>
+        ))}
+      </div>
+      <StripStat isLight={isLight} value={stats.openSourceContributions} label="Open Source" align="right" />
+    </div>
+  );
+}
 
 const INTRO_MS = 3000;
 
@@ -229,6 +386,7 @@ function IconGridTile({ heading, items, index, isLight }: { heading: string; ite
 function HeroTile({ isLight }: { isLight: boolean }) {
   const nameColor = isLight ? '#3a3a3e' : '#f4f3f7';
   const nameShine = isLight ? '#ffffff' : '#9a9aa5';
+  const githubStats = useGithubStats();
   return (
     <motion.div
       className={`${tileClass(isLight)} relative col-span-2 flex flex-col items-center @[900px]:col-span-3`}
@@ -266,23 +424,54 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             <ShinyText text="KRISHAN" color={nameColor} shineColor={nameShine} speed={2.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
             <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
           </div>
-          <img
-            src={AVATAR_URL}
-            alt={NAME}
-            className={`h-20 w-20 shrink-0 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
-          />
+          <div className="relative shrink-0">
+            <img
+              src={AVATAR_URL}
+              alt={NAME}
+              className={`h-20 w-20 rounded-full object-cover shadow-md ring-4 sm:h-32 sm:w-32 ${isLight ? 'ring-white' : 'ring-white/15'}`}
+            />
+            {/* GitHub Pro indicator — a static, self-drawn verified-style
+                checkmark (the same visual language as X/Twitter's blue
+                check), not data pulled from GitHub: GitHub's public API has
+                no "Pro plan" field at all (that's account-private info, only
+                visible to the signed-in owner), so there's nothing to fetch
+                here — this is a plain assertion, same as any other fact on
+                this page. */}
+            <span
+              className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white sm:h-7 sm:w-7"
+              style={{ background: '#1d9bf0' }}
+              title="GitHub Pro"
+              aria-label="GitHub Pro account"
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </div>
           <div className="flex flex-col items-center gap-2">
             <ShinyText text="MURARI" color={nameColor} shineColor={nameShine} speed={2.4} delay={0.4} className="text-2xl font-bold tracking-wide sm:text-5xl" />
             <span className={`h-px w-20 bg-gradient-to-r from-transparent to-transparent sm:w-32 ${isLight ? 'via-black/25' : 'via-white/25'}`} />
           </div>
         </div>
+        {/* Thin strip: total commits on the left, open-source contribution
+            count (is-a-dev/register + Horilla) on the right, a row of real
+            GitHub-stat badges in the center — see GithubStatsStrip's own
+            comment for how many of those badges are actually visible at a
+            given width. Renders nothing until the generating workflow has
+            committed public/github-stats.json at least once, same
+            "absent rather than broken" rule as everything else GitHub-data
+            related on this page. */}
+        <GithubStatsStrip isLight={isLight} stats={githubStats} />
         {/* No max-w cap — the previous max-w-xl held the paragraph to
             576px regardless of how wide the card actually was, leaving
             large empty gutters on either side once the card widened past
             that; it now spans the same width as the photo/banner above. */}
-        <p className={`w-full text-justify text-base leading-relaxed sm:text-lg ${isLight ? 'text-black/75' : 'text-white/80'}`}>
-          <DecryptedText text={ABOUT_ME} animateOn="view" sequential revealDirection="start" speed={16} maxIterations={36} />
-        </p>
+        <div className="w-full">
+          <div className={`mb-1.5 text-xs font-semibold tracking-wider uppercase ${isLight ? 'text-black/40' : 'text-white/40'}`}>Description</div>
+          <p className={`text-justify text-base leading-relaxed sm:text-lg ${isLight ? 'text-black/75' : 'text-white/80'}`}>
+            <DecryptedText text={ABOUT_ME} animateOn="view" sequential revealDirection="start" speed={16} maxIterations={36} />
+          </p>
+        </div>
       </div>
     </motion.div>
   );

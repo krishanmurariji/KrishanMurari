@@ -1,0 +1,34 @@
+name: Update GitHub stats
+
+# Generates public/github-stats.json (total commits, stars, PRs merged,
+# open-source contributions, …) by calling GitHub's own REST + Search API
+# directly — see .github/scripts/update-github-stats.sh for why this
+# deliberately avoids any third-party badge/rendering service or Action.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: write
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stats from GitHub's API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/update-github-stats.sh
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/github-stats.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: refresh GitHub stats"
+            git push
+          fi

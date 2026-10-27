@@ -229,8 +229,13 @@ function AchievementFlank({
       <NameStat isLight={isLight} value={stat.value} label={stat.label} icon={stat.icon} />
     </div>
   ) : null;
+  // Not flex-1 — that stretched each flank across the leftover width on a
+  // wide card, which (even with justify-end/-start) read as a gap between
+  // the badges and the name rather than a tight group. This hugs its own
+  // content instead; the parent row centers the whole cluster, so leftover
+  // width becomes outer margin on the card, not internal gaps.
   return (
-    <div className={`flex flex-1 items-center gap-2 sm:gap-3 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex items-center gap-2 sm:gap-3 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
       {side === 'left' && statEl}
       {achievements.map((achievement, slot) => (
         <AchievementBadge
@@ -478,7 +483,7 @@ function HeroTile({ isLight }: { isLight: boolean }) {
           style={{ aspectRatio: '663 / 104' }}
         />
       </div>
-      <div className="relative flex w-full flex-col items-center gap-4 p-5 sm:gap-6 sm:p-8">
+      <div className="relative flex w-full flex-col items-center gap-3 p-5 sm:gap-4 sm:p-8">
         <div
           className="absolute inset-x-0 top-0 bottom-0 -z-10 opacity-40"
           aria-hidden
@@ -493,11 +498,14 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             direction to treat them the same way — flank this whole row
             instead of sitting in a separate strip below it (that strip's
             flat background wasn't working, and it was clipping the "x2"
-            tier pill). See AchievementFlank's own comment for why the name
-            block stays centered regardless of how much of this actually
-            shows, and for why the stat sits outermost (the last thing to
-            appear as space opens up) rather than always-on like before. */}
-        <div className="-mt-10 flex w-full items-center gap-2 sm:-mt-16 sm:gap-4">
+            tier pill). The whole cluster (stat, badges, name, avatar, name,
+            badges, stat) stays one tight group via this row's own
+            justify-center, rather than stretching flank-to-flank across
+            the card on a wide screen — that read as a gap between the
+            badges and the name instead of looking like one unit. See
+            AchievementFlank's own comment for why the stat sits outermost
+            (the last thing to appear as space opens up). */}
+        <div className="-mt-10 flex w-full items-center justify-center gap-2 sm:-mt-16 sm:gap-4">
           <AchievementFlank
             isLight={isLight}
             achievements={leftAchievements}
@@ -549,12 +557,9 @@ function HeroTile({ isLight }: { isLight: boolean }) {
             576px regardless of how wide the card actually was, leaving
             large empty gutters on either side once the card widened past
             that; it now spans the same width as the photo/banner above. */}
-        <div className="w-full">
-          <div className={`mb-1.5 text-xs font-semibold tracking-wider uppercase ${isLight ? 'text-black/40' : 'text-white/40'}`}>Description</div>
-          <p className={`text-justify text-base leading-relaxed sm:text-lg ${isLight ? 'text-black/75' : 'text-white/80'}`}>
-            <DecryptedText text={ABOUT_ME} animateOn="view" sequential revealDirection="start" speed={16} maxIterations={36} />
-          </p>
-        </div>
+        <p className={`w-full text-justify text-base leading-relaxed sm:text-lg ${isLight ? 'text-black/75' : 'text-white/80'}`}>
+          <DecryptedText text={ABOUT_ME} animateOn="view" sequential revealDirection="start" speed={16} maxIterations={36} />
+        </p>
       </div>
     </motion.div>
   );

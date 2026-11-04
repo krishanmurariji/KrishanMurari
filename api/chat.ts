@@ -9,7 +9,13 @@
 // that file's own, longer comment on this). Inlining is the proven-working
 // fix; the duplication with api/_lib/ (still the source dev/ imports) is
 // the accepted cost — keep both in sync if this logic ever changes.
+//
+// OpenAI is the primary provider; Gemini (the original, free-tier) is kept
+// as an automatic fallback rather than removed, so a visitor never sees a
+// hard failure just because one provider is down or (Gemini's case) has
+// hit its shared daily quota.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import OpenAI from 'openai';
 import { GoogleGenAI, ApiError } from '@google/genai';
 
 interface ChatMessage {
@@ -19,13 +25,27 @@ interface ChatMessage {
 
 const MAX_MESSAGES = 24;
 const MAX_MESSAGE_LENGTH = 600;
+// A cost cap for OpenAI (the primary provider, billed per request — unlike
+// Gemini's free tier) as much as a quota cap for the Gemini fallback;
+// stays comfortably under both so a burst of chat traffic degrades to
+// "assistant's resting for today, please email me" rather than either
+// racking up an open-ended OpenAI bill or silently 429ing on Gemini.
 const GLOBAL_DAILY_MAX = 1000;
 // gemini-2.5-flash was retired for new API keys — confirmed live against
 // Google's own API error ("models/gemini-2.5-flash is no longer available
 // to new users... use models/gemini-3.8-flash"), not assumed from
 // (possibly stale) SDK docs. Google rotates model names periodically; if
 // this ever 404s again, the runtime error names the current replacement.
-const MODEL = 'gemini-3.8-flash';
+const GEMINI_MODEL = 'gemini-3.8-flash';
+// gpt-4o-mini: OpenAI's standard small/cheap chat model — picked over a
+// newer-sounding name specifically because this exact identifier is the
+// one I'm actually confident is spelled right; OpenAI has historically
+// kept it available for a long stretch after newer families launch, unlike
+// Gemini's comparatively fast model churn above. If OpenAI ever retires it
+// too, the runtime error from the API call will name the replacement, same
+// as the Gemini case — check Vercel's function logs for "[api/chat] OpenAI
+// request failed" if the assistant starts always falling back to Gemini.
+const OPENAI_MODEL = 'gpt-4o-mini';
 
 // Rejects a message that's actually a script/markup injection attempt
 // rather than a real question — kept in sync by hand with the identical
@@ -215,7 +235,50 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateAssistantReply(apiKey: string, messages: ChatMessage[]): Promise<string> {
+async function generateWithOpenAI(apiKey: string, messages: ChatMessage[]): Promise<string> {
+  const client = new OpenAI({ apiKey });
+  const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: buildAssistantSystemPrompt() },
+    // Gemini's 'model' role is OpenAI's 'assistant' — everything else
+    // (the text itself) carries over unchanged.
+    ...messages.map((m) => ({ role: m.role === 'model' ? ('assistant' as const) : ('user' as const), content: m.text })),
+  ];
+
+  // A 429/500/503 can be OpenAI's own servers being momentarily over
+  // capacity or rate-limited — genuinely transient, unlike a 400/401/404
+  // (bad key/model, retrying won't help). One short retry turns "visitor
+  // sees a random failure" into "visitor never notices" for exactly that
+  // one recoverable case, same reasoning as the Gemini retry below.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await client.chat.completions.create({
+        model: OPENAI_MODEL,
+        messages: chatMessages,
+        temperature: 0.6,
+        max_tokens: 400,
+      });
+
+      const choice = response.choices[0];
+      // content_filter is OpenAI's own moderation layer blocking the
+      // request/response — surfacing that as the assistant's own on-brand
+      // redirect reads far better than a blank reply or a raw error, same
+      // as Gemini's promptFeedback.blockReason case below.
+      if (choice?.finish_reason === 'content_filter') return BLOCKED_REPLY;
+      return choice?.message?.content?.trim() || FALLBACK_REPLY;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 0 && err instanceof OpenAI.APIError && err.status && [429, 500, 503].includes(err.status)) {
+        await sleep(700);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+async function generateWithGemini(apiKey: string, messages: ChatMessage[]): Promise<string> {
   const ai = new GoogleGenAI({ apiKey });
   const contents = messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
 
@@ -228,7 +291,7 @@ async function generateAssistantReply(apiKey: string, messages: ChatMessage[]): 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await ai.models.generateContent({
-        model: MODEL,
+        model: GEMINI_MODEL,
         contents,
         config: {
           systemInstruction: buildAssistantSystemPrompt(),
@@ -251,15 +314,40 @@ async function generateAssistantReply(apiKey: string, messages: ChatMessage[]): 
   throw lastErr;
 }
 
+interface ChatProviderKeys {
+  openaiKey?: string;
+  geminiKey?: string;
+}
+
+// OpenAI first (the primary provider), Gemini only as a fallback — see
+// this file's own top-of-file comment for why. A visitor never sees which
+// provider actually answered; both are grounded in the exact same system
+// prompt, so the only difference is reliability, not behavior.
+async function generateAssistantReply(keys: ChatProviderKeys, messages: ChatMessage[]): Promise<string> {
+  if (keys.openaiKey) {
+    try {
+      return await generateWithOpenAI(keys.openaiKey, messages);
+    } catch (err) {
+      console.error('[api/chat] OpenAI request failed, falling back to Gemini:', err);
+      if (!keys.geminiKey) throw err;
+    }
+  }
+  if (!keys.geminiKey) {
+    throw new Error('No AI provider API key configured (need OPENAI_API_KEY and/or GEMINI_API_KEY)');
+  }
+  return generateWithGemini(keys.geminiKey, messages);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.status(405).end();
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!openaiKey && !geminiKey) {
+    res.status(500).json({ error: 'Neither OPENAI_API_KEY nor GEMINI_API_KEY is set' });
     return;
   }
 
@@ -298,10 +386,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const reply = await generateAssistantReply(apiKey, messages);
+    const reply = await generateAssistantReply({ openaiKey, geminiKey }, messages);
     res.status(200).json({ reply });
   } catch (err) {
-    console.error('[api/chat] Gemini request failed:', err);
+    console.error('[api/chat] All configured AI providers failed:', err);
     res.status(502).json({ error: "Sorry, I couldn't get a response together just now — please try again, or email Krishan directly." });
   }
 }

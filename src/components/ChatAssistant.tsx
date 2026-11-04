@@ -1,10 +1,14 @@
 // The "Chat Now" AI assistant — replaces the Photo widget's old "Contact
-// Me" mailto link (see PhotoCard in DesktopWidgets.tsx). A Gemini-backed
-// assistant named "I" (a pun — one eye — formerly "Om"), grounded in
-// Krishan's real resume/experience data (the system prompt lives
-// server-side only — see api/_lib/assistant-knowledge.ts / api/chat.ts,
-// never shipped to the client), so it can answer questions about his
-// background on his behalf without inventing anything.
+// Me" mailto link (see PhotoCard in DesktopWidgets.tsx). An assistant
+// named "I" (a pun — one eye — formerly "Om"), grounded in Krishan's real
+// resume/experience data (the system prompt lives server-side only — see
+// api/_lib/assistant-knowledge.ts / api/chat.ts, never shipped to the
+// client), so it can answer questions about his background on his behalf
+// without inventing anything. Backed by OpenAI as the primary model, with
+// Gemini (the original provider) kept as an automatic fallback if OpenAI
+// fails or isn't configured — see api/_lib/chat.ts's own comment for why
+// both exist rather than just switching over outright. The client never
+// knows or cares which one actually answered.
 //
 // Rendered via a portal straight onto `document.body` rather than in place
 // — this is opened from deep inside DesktopWidgets/PhotoCard, and a plain
@@ -16,9 +20,9 @@
 // Security model (see api/chat.ts for the server-side half of this):
 // Cloudflare Turnstile gates only the *first* message of a conversation —
 // proving a human started it — not every message, which would make a
-// multi-turn chat unusable. Per-IP and site-wide daily rate limits (the
-// Gemini free tier's request quota is shared across every visitor, not
-// per-visitor) are the ongoing defense after that.
+// multi-turn chat unusable. Per-IP and site-wide daily rate limits (a cost
+// cap for OpenAI's per-request billing as much as a quota cap for the
+// Gemini fallback) are the ongoing defense after that.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';

@@ -1,17 +1,17 @@
 // Dev-only Vite middleware for the "Chat Now" AI assistant
 // (src/components/ChatAssistant.tsx) — verifies a Cloudflare Turnstile
 // token on the first message of a conversation, applies per-IP and
-// site-wide daily rate limits, then calls Gemini (see
-// api/_lib/chat.ts + api/_lib/assistant-knowledge.ts, the logic this
-// mirrors). Lives here rather than client code for the same reason as
-// email-plugin.ts: it needs the real Gemini API key and Turnstile secret,
-// neither of which must ever ship to the browser. This plugin's
+// site-wide daily rate limits, then calls OpenAI (falling back to Gemini —
+// see api/_lib/chat.ts + api/_lib/assistant-knowledge.ts, the logic this
+// mirrors, for why both exist). Lives here rather than client code for the
+// same reason as email-plugin.ts: it needs the real API keys and Turnstile
+// secret, none of which must ever ship to the browser. This plugin's
 // `configureServer` hook only runs under `vite dev`/`vite preview`, never
 // bundled into the production build.
 //
 // The real deploy target is Vercel — see api/chat.ts, which ports this same
 // logic (shared via api/_lib/chat.ts, so there's one copy of the
-// validation/Gemini-call code, not two) into a serverless function.
+// validation/provider-call code, not two) into a serverless function.
 import type { Plugin } from 'vite';
 import { validateChatBody, generateAssistantReply, GLOBAL_DAILY_MAX } from '../api/_lib/chat';
 import { verifyTurnstile, checkRateLimit, checkGlobalDailyLimit } from '../api/_lib/security';
@@ -51,9 +51,10 @@ export function chatDevPlugin(): Plugin {
           res.end(JSON.stringify(payload));
         };
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-          sendJson(500, { error: 'GEMINI_API_KEY not set in .env.local' });
+        const openaiKey = process.env.OPENAI_API_KEY;
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!openaiKey && !geminiKey) {
+          sendJson(500, { error: 'Neither OPENAI_API_KEY nor GEMINI_API_KEY is set in .env.local' });
           return;
         }
 
@@ -99,10 +100,10 @@ export function chatDevPlugin(): Plugin {
         }
 
         try {
-          const reply = await generateAssistantReply(apiKey, messages);
+          const reply = await generateAssistantReply({ openaiKey, geminiKey }, messages);
           sendJson(200, { reply });
         } catch (err) {
-          console.error('[chat] Gemini request failed:', err);
+          console.error('[chat] All configured AI providers failed:', err);
           sendJson(502, { error: "Sorry, I couldn't get a response together just now — please try again, or email Krishan directly." });
         }
       });

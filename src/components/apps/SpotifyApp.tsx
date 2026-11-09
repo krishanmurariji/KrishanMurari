@@ -6,19 +6,18 @@
 // Spotify clone: light chrome (Spotify's own light-mode palette, per
 // request — was near-black), the real soundwave logomark, a splash screen
 // on open, and both the "Recently played" row and search results browsed
-// through a 3D perspective carousel (see ui/perspective-carousel.tsx) rather
-// than a plain grid/list, so it reads as "Spotify" at a glance rather than
-// "another glass panel." That player is a single app-wide instance (mounted
-// once in App.tsx), so play/pause/skip here stays in lockstep with the dock
-// icon's own hover popup (MacDock.tsx) — same track, same transport, two
-// views of the same state rather than two independent players.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// through a grid of hoverable track cards (no slider/carousel navigation —
+// deliberately dropped in favor of a plain scrollable grid). That player is
+// a single app-wide instance (mounted once in App.tsx), so play/pause/skip
+// here stays in lockstep with the dock icon's own hover popup
+// (MacDock.tsx) — same track, same transport, two views of the same state
+// rather than two independent players.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useYouTubePlayer, searchYouTube, type YouTubeTrack } from '../../lib/youtube-player';
 import { loadJSON, saveJSON, loadBool, saveBool } from '../../lib/storage';
 import spotifyLoadingAnimation from '../../assets/spotify-loading.svg';
-import { PerspectiveCarousel, type PerspectiveCarouselItem } from '../ui/perspective-carousel';
 
 const MAX_RECENT_TRACKS = 8;
 // The supplied animation doesn't reach its full-size green circle until
@@ -176,52 +175,93 @@ function SpotifySplash({ bg }: { bg: string }) {
   );
 }
 
-// Both "Recently played" and search results now browse through the same 3D
-// perspective carousel (see ui/perspective-carousel.tsx) rather than a grid
-// of cards or a vertical row list — tapping a track's own artwork plays it
-// (PerspectiveCarousel's onSlideActivate, fired only for that, never for the
-// arrow/dot navigation); the arrows and dots just bring a different track
-// into focus without playing it. Opens centered on whatever's already
-// playing when that track is part of this exact list.
-function TrackCarousel({
-  tracks,
-  currentId,
-  onActivate,
+// One "medium size rounded card" for the track grid below — thumbnail,
+// title, channel — with the same rotating accent-color border glow as the
+// mini-player's hovered state (see MiniPlayer further down), so hovering
+// any track reads as "something is alive here" instead of a slider's
+// prev/next/dot navigation. Clicking anywhere on the card plays it.
+function TrackCard({
+  track,
+  active,
+  playing,
   isLight,
   cardBg,
+  onActivate,
+}: {
+  track: YouTubeTrack;
+  active: boolean;
+  playing: boolean;
+  isLight: boolean;
+  cardBg: string;
+  onActivate: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div className="relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      {hovered && (
+        <motion.div
+          className="pointer-events-none absolute -inset-[2px] rounded-2xl"
+          style={{ background: `conic-gradient(${ACCENT}, transparent 35%, transparent 65%, ${ACCENT})` }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }}
+        />
+      )}
+      <button
+        type="button"
+        onClick={onActivate}
+        className="relative flex w-full flex-col gap-2 rounded-2xl p-2 text-left transition hover:scale-[1.02]"
+        style={{ background: cardBg }}
+      >
+        <div className="relative aspect-square w-full overflow-hidden rounded-xl">
+          <img src={track.thumbnail} alt="" className="h-full w-full object-cover" />
+          {active && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <EqualizerBars playing={playing} color="#fff" />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 px-0.5 pb-0.5">
+          <div className={`truncate text-sm font-medium ${isLight ? 'text-black' : 'text-white'}`}>{track.title}</div>
+          <div className={`truncate text-xs ${isLight ? 'text-black/50' : 'text-white/50'}`}>{track.channelTitle}</div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+// Both "Recently played" and search results browse through this same
+// scrollable grid — replaces the old 3D perspective carousel's prev/next
+// arrows and dot navigation outright, per request, rather than relocating
+// that slider control elsewhere.
+function TrackGrid({
+  tracks,
+  currentId,
+  playing,
+  isLight,
+  cardBg,
+  onActivate,
 }: {
   tracks: YouTubeTrack[];
   currentId?: string;
-  onActivate: (track: YouTubeTrack, index: number) => void;
+  playing: boolean;
   isLight: boolean;
   cardBg: string;
+  onActivate: (track: YouTubeTrack, index: number) => void;
 }) {
-  const items: PerspectiveCarouselItem[] = useMemo(
-    () => tracks.map((t) => ({ src: t.thumbnail, title: t.title, alt: t.title })),
-    [tracks]
-  );
-  const defaultActiveIndex = Math.max(0, tracks.findIndex((t) => t.id === currentId));
-
   return (
-    <PerspectiveCarousel
-      items={items}
-      defaultActiveIndex={defaultActiveIndex}
-      onSlideActivate={(index) => onActivate(tracks[index], index)}
-      // The carousel centers its image+title column vertically within this
-      // container, while the prev/dots/next pill is pinned to the
-      // container's own bottom edge — at the component's default 200px
-      // slide width (267px-tall artwork, aspect-[3/4]) the centered column
-      // runs taller than the room this card actually has in a non-fullscreen
-      // Spotify window, so the title line lands right on top of the pill
-      // instead of above it. A smaller thumbnail shortens that column enough
-      // to clear the pill with room to spare, even at the window's default
-      // (non-maximized) size.
-      slideWidth={130}
-      labelClassName={isLight ? 'text-black font-medium' : 'text-white font-medium'}
-      controlsClassName={isLight ? 'border-black/10 text-black/70' : 'border-white/10 text-white/70'}
-      style={{ background: cardBg }}
-      className="rounded-xl"
-    />
+    <div className="grid h-full grid-cols-2 content-start gap-4 overflow-y-auto pb-1 pr-1 sm:grid-cols-3">
+      {tracks.map((track, index) => (
+        <TrackCard
+          key={track.id}
+          track={track}
+          active={track.id === currentId}
+          playing={playing}
+          isLight={isLight}
+          cardBg={cardBg}
+          onActivate={() => onActivate(track, index)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -621,7 +661,8 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
       </div>
 
       {/* Body — recently-played and search results both browse through the
-          same 3D perspective carousel (TrackCarousel above). */}
+          same scrollable grid of hoverable track cards (TrackGrid above) —
+          no slider/carousel navigation. */}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {status === 'searching' && (
           <div className={`flex h-full items-center justify-center gap-2 text-sm ${isLight ? 'text-black/60' : 'text-white/60'}`}>
@@ -635,10 +676,10 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
             <div className="flex h-full min-h-0 flex-1 flex-col gap-3 px-5 pb-4 pt-1">
               <div className={`text-lg font-bold ${textClass}`}>Recently played</div>
               <div className="relative min-h-0 flex-1">
-                <TrackCarousel
-                  key={recentTracks.map((t) => t.id).join('|')}
+                <TrackGrid
                   tracks={recentTracks}
                   currentId={player.current?.id}
+                  playing={player.playing}
                   onActivate={(track, index) => playTrack(track, recentTracks, index)}
                   isLight={isLight}
                   cardBg={CARD_BG}
@@ -653,10 +694,10 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
         )}
         {results.length > 0 && (
           <div className="relative min-h-0 flex-1 px-5 pb-4 pt-1">
-            <TrackCarousel
-              key={results.map((t) => t.id).join('|')}
+            <TrackGrid
               tracks={results}
               currentId={player.current?.id}
+              playing={player.playing}
               onActivate={(track, index) => playTrack(track, results, index)}
               isLight={isLight}
               cardBg={CARD_BG}

@@ -179,7 +179,12 @@ function SpotifySplash({ bg }: { bg: string }) {
 // title, channel — with the same rotating accent-color border glow as the
 // mini-player's hovered state (see MiniPlayer further down), so hovering
 // any track reads as "something is alive here" instead of a slider's
-// prev/next/dot navigation. Clicking anywhere on the card plays it.
+// prev/next/dot navigation. Clicking anywhere on the card plays it. The
+// currently-playing card additionally gets a persistent accent ring (not
+// hover-gated, so it stays identifiable at a glance) plus the equalizer
+// overlay on its thumbnail — distinct from the rotating glow every card
+// gets on hover, so "this is playing" and "you're hovering this" never
+// look like the same thing.
 function TrackCard({
   track,
   active,
@@ -210,12 +215,12 @@ function TrackCard({
         type="button"
         onClick={onActivate}
         className="relative flex w-full flex-col gap-2 rounded-2xl p-2 text-left transition hover:scale-[1.02]"
-        style={{ background: cardBg }}
+        style={{ background: cardBg, boxShadow: active ? `0 0 0 2px ${ACCENT}` : undefined }}
       >
         <div className="relative aspect-square w-full overflow-hidden rounded-xl">
           <img src={track.thumbnail} alt="" className="h-full w-full object-cover" />
           {active && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/45">
               <EqualizerBars playing={playing} color="#fff" />
             </div>
           )}
@@ -299,14 +304,17 @@ function isSpotifyUserOrNull(value: unknown): value is SpotifyUser | null {
 // The small collapsed mini-player's "now playing" tell — three bars dancing
 // while playing, settled flat while paused — standing in for the numeric
 // progress/scrub slider the redesign explicitly dropped: enough to read as
-// "something is happening" without reintroducing a control surface.
+// "something is happening" without reintroducing a control surface. Each
+// bar needs its own height class (h-full, filling the row's own h-3.5) —
+// a <span> has no height of its own to scaleY from, so without it every
+// bar silently renders at 0px regardless of the animation driving it.
 function EqualizerBars({ playing, color }: { playing: boolean; color: string }) {
   return (
     <div className="flex h-3.5 items-end gap-[2px]" aria-hidden>
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="w-[3px] origin-bottom rounded-full"
+          className="h-full w-[3px] origin-bottom rounded-full"
           style={{ background: color }}
           animate={playing ? { scaleY: [0.3, 1, 0.45, 0.85, 0.3] } : { scaleY: 0.3 }}
           transition={playing ? { duration: 0.9 + i * 0.15, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}

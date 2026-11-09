@@ -11,6 +11,8 @@ const KEYS = {
   widgetOrder: 'portfolio:widgetOrder',
   authUser: 'portfolio:authUser',
   spotifyRecentTracks: 'portfolio:spotifyRecentTracks',
+  spotifyUser: 'portfolio:spotifyUser',
+  spotifyMuted: 'portfolio:spotifyMuted',
 } as const;
 
 type StorageKey = keyof typeof KEYS;

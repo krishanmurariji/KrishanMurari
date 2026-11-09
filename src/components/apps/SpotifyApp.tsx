@@ -16,9 +16,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useYouTubePlayer, searchYouTube, type YouTubeTrack } from '../../lib/youtube-player';
-import { loadJSON, saveJSON } from '../../lib/storage';
+import { loadJSON, saveJSON, loadBool, saveBool } from '../../lib/storage';
 import spotifyLoadingAnimation from '../../assets/spotify-loading.svg';
-import Hyperspeed from '../ui/Hyperspeed';
 import { PerspectiveCarousel, type PerspectiveCarouselItem } from '../ui/perspective-carousel';
 
 const MAX_RECENT_TRACKS = 8;
@@ -126,6 +125,27 @@ function VolumeIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+function SignInGlyph(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <circle cx="12" cy="8" r="3.4" />
+      <path d="M4.5 20c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5" />
+    </svg>
+  );
+}
+// Shown in the mini-player's corner when nothing has ever been played this
+// session — a music note with a line through it, distinct enough from the
+// real play/pause glyphs that it reads as "empty" rather than "muted."
+function NoTrackIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M9 18V6l10-2v11" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="16" cy="15" r="3" />
+      <line x1="3" y1="3" x2="21" y2="21" />
+    </svg>
+  );
+}
 
 // The splash screen shown for a beat every time the window opens, before
 // the home section appears — matching the real Spotify app's own boot
@@ -154,13 +174,6 @@ function SpotifySplash({ bg }: { bg: string }) {
       />
     </motion.div>
   );
-}
-
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 // Both "Recently played" and search results now browse through the same 3D
@@ -212,6 +225,278 @@ function TrackCarousel({
   );
 }
 
+// A purely local "account" — no backend, no real auth, just a name typed in
+// once and remembered on this device (the same loadJSON/saveJSON
+// localStorage pattern already used for recentTracks above), so signing in
+// has something genuine to unlock: the muted preference persists across
+// reopens once signed in, where previously (and still, for an anonymous
+// visitor) it always reset to unmuted.
+interface SpotifyUser {
+  name: string;
+}
+function isSpotifyUserOrNull(value: unknown): value is SpotifyUser | null {
+  return value === null || (!!value && typeof value === 'object' && typeof (value as SpotifyUser).name === 'string');
+}
+
+// The small collapsed mini-player's "now playing" tell — three bars dancing
+// while playing, settled flat while paused — standing in for the numeric
+// progress/scrub slider the redesign explicitly dropped: enough to read as
+// "something is happening" without reintroducing a control surface.
+function EqualizerBars({ playing, color }: { playing: boolean; color: string }) {
+  return (
+    <div className="flex h-3.5 items-end gap-[2px]" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="w-[3px] origin-bottom rounded-full"
+          style={{ background: color }}
+          animate={playing ? { scaleY: [0.3, 1, 0.45, 0.85, 0.3] } : { scaleY: 0.3 }}
+          transition={playing ? { duration: 0.9 + i * 0.15, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Top-right sign-in control: an account glyph that becomes an initial-letter
+// avatar once signed in. Hover shows the explanatory tooltip; a click opens
+// the actual sign-in form (or the signed-in summary/sign-out), and the two
+// never show at once — the tooltip is suppressed while the popover is open.
+function SignInControl({
+  isLight,
+  user,
+  onSignIn,
+  onSignOut,
+}: {
+  isLight: boolean;
+  user: SpotifyUser | null;
+  onSignIn: (name: string) => void;
+  onSignOut: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open]);
+
+  const handleSignIn = (e: FormEvent) => {
+    e.preventDefault();
+    const name = nameInput.trim();
+    if (!name) return;
+    onSignIn(name);
+    setNameInput('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className="group/signin relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label={user ? `Signed in as ${user.name}` : 'Sign in'}
+        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition hover:scale-105 ${
+          user ? 'text-white' : isLight ? 'bg-black/5 text-black/55' : 'bg-white/10 text-white/55'
+        }`}
+        style={user ? { background: ACCENT } : undefined}
+      >
+        {user ? user.name.trim().charAt(0).toUpperCase() : <SignInGlyph className="h-4 w-4" />}
+      </button>
+
+      {/* Tooltip — professional phrasing of "sign up to save your settings,
+          preferences and songs played." Hidden while the popover is open so
+          the two never overlap. */}
+      {!open && (
+        <div
+          className={`pointer-events-none absolute right-0 top-full z-20 mt-2 w-max max-w-[190px] rounded-lg px-2.5 py-1.5 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity duration-150 group-hover/signin:opacity-100 ${
+            isLight ? 'bg-black text-white' : 'bg-white text-black'
+          }`}
+        >
+          {user ? `Signed in as ${user.name}` : 'Sign in to save your preferences and listening history on this device'}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className={`absolute right-0 top-full z-20 mt-2 w-60 rounded-xl p-3 shadow-xl ${
+              isLight ? 'bg-white ring-1 ring-black/10' : 'bg-[#181818] ring-1 ring-white/10'
+            }`}
+          >
+            {user ? (
+              <div className="flex flex-col gap-2">
+                <div className={`text-sm font-medium ${isLight ? 'text-black' : 'text-white'}`}>Signed in as {user.name}</div>
+                <div className={`text-xs ${isLight ? 'text-black/50' : 'text-white/50'}`}>Your preferences and listening history are saved on this device.</div>
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className={`mt-1 rounded-full py-1.5 text-xs font-semibold transition ${
+                    isLight ? 'bg-black/5 text-black hover:bg-black/10' : 'bg-white/10 text-white hover:bg-white/15'
+                  }`}
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSignIn} className="flex flex-col gap-2">
+                <div className={`text-xs ${isLight ? 'text-black/60' : 'text-white/60'}`}>Sign in to save your preferences and listening history on this device.</div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="Your name"
+                  className={`rounded-full px-3 py-1.5 text-sm outline-none ${
+                    isLight ? 'bg-black/5 text-black placeholder:text-black/40' : 'bg-white/10 text-white placeholder:text-white/40'
+                  }`}
+                />
+                <button type="submit" className="rounded-full py-1.5 text-xs font-semibold text-black transition hover:brightness-95" style={{ background: ACCENT }}>
+                  Sign in
+                </button>
+              </form>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Replaces the old full-width now-playing bar: a small floating widget
+// pinned to the body's bottom-right corner instead of a bar that claims a
+// whole row across the window. Collapsed by default — just the thumbnail,
+// the equalizer tell, and a centered play/pause — and expands into a
+// medium rounded card on hover with the full track details and transport,
+// a rotating accent-color ring glowing around it only while hovered. No
+// progress/seek slider in either state, per the redesign dropping it
+// outright rather than relocating it.
+function MiniPlayer({
+  player,
+  isLight,
+  textClass,
+  muted,
+  onToggleMute,
+}: {
+  player: ReturnType<typeof useYouTubePlayer>;
+  isLight: boolean;
+  textClass: string;
+  muted: boolean;
+  onToggleMute: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const track = player.current;
+  const cardBg = isLight ? 'rgba(255,255,255,0.97)' : 'rgba(24,24,24,0.97)';
+  const iconMuted = isLight ? 'text-black/70 hover:text-black' : 'text-white/70 hover:text-white';
+
+  if (!track) {
+    return (
+      <div
+        className={`absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full ${
+          isLight ? 'bg-black/5 text-black/30' : 'bg-white/10 text-white/30'
+        }`}
+        title="Nothing played yet"
+      >
+        <NoTrackIcon className="h-5 w-5" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute bottom-4 right-4 z-20" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      {/* The running-border glow — a separate, slightly larger sibling layer
+          behind the card rather than a parent wrapper, so rotating it
+          doesn't also spin the card's own text/thumbnail. Only mounted
+          while hovered; framer-motion's own exit (no AnimatePresence here —
+          it just unmounts) is fine since it has no exit animation to lose. */}
+      {hovered && (
+        <motion.div
+          className="pointer-events-none absolute -inset-[3px] rounded-[20px]"
+          style={{ background: `conic-gradient(${ACCENT}, transparent 35%, transparent 65%, ${ACCENT})` }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }}
+        />
+      )}
+
+      <motion.div
+        className="relative overflow-hidden"
+        animate={{ width: hovered ? 272 : 124, borderRadius: hovered ? 20 : 999 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+        style={{ background: cardBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+      >
+        {!hovered ? (
+          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+            <img src={track.thumbnail} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            <EqualizerBars playing={player.playing} color={ACCENT} />
+            <button
+              type="button"
+              aria-label={player.playing ? 'Pause' : 'Play'}
+              onClick={player.togglePlay}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition hover:scale-105 ${
+                isLight ? 'bg-black text-white' : 'bg-white text-black'
+              }`}
+            >
+              {player.loading ? (
+                <span className={`h-3 w-3 animate-spin rounded-full border-2 ${isLight ? 'border-white/30 border-t-white' : 'border-black/30 border-t-black'}`} />
+              ) : player.playing ? (
+                <PauseIcon className="h-3.5 w-3.5" />
+              ) : (
+                <PlayIcon className="ml-0.5 h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5 p-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <img src={track.thumbnail} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+              <div className="min-w-0">
+                <div className={`truncate text-sm font-medium ${textClass}`}>{track.title}</div>
+                <div className={`truncate text-xs ${isLight ? 'text-black/50' : 'text-white/50'}`}>{track.channelTitle}</div>
+              </div>
+            </div>
+            <div className="flex items-center justify-center gap-5">
+              <button type="button" aria-label="Previous" onClick={player.skipPrev} className={`transition ${iconMuted}`}>
+                <PrevIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                aria-label={player.playing ? 'Pause' : 'Play'}
+                onClick={player.togglePlay}
+                className={`flex h-9 w-9 items-center justify-center rounded-full transition hover:scale-105 ${
+                  isLight ? 'bg-black text-white' : 'bg-white text-black'
+                }`}
+              >
+                {player.loading ? (
+                  <span className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${isLight ? 'border-white/30 border-t-white' : 'border-black/30 border-t-black'}`} />
+                ) : player.playing ? (
+                  <PauseIcon className="h-4 w-4" />
+                ) : (
+                  <PlayIcon className="ml-0.5 h-4 w-4" />
+                )}
+              </button>
+              <button type="button" aria-label="Next" onClick={player.skipNext} className={`transition ${iconMuted}`}>
+                <NextIcon className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label={muted ? 'Unmute' : 'Mute'} onClick={onToggleMute} className={`transition ${iconMuted}`}>
+                {muted ? <MuteIcon className="h-4 w-4" /> : <VolumeIcon className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
   const { bg: BG, cardBg: CARD_BG } = paletteFor(isLight);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -221,7 +506,12 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
   const [status, setStatus] = useState<'idle' | 'searching' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
-  const [muted, setMuted] = useState(false);
+  // The local "account" (see SignInControl's own comment) and the one
+  // preference it actually unlocks: muted stays persisted across reopens
+  // only once signed in — an anonymous visitor's mute still resets each
+  // time, same as before this redesign.
+  const [user, setUser] = useState<SpotifyUser | null>(() => loadJSON('spotifyUser', null, isSpotifyUserOrNull));
+  const [muted, setMuted] = useState(() => (user ? loadBool('spotifyMuted', false) : false));
   // What the "home" (idle, no active search) section shows — the actual
   // tracks a visitor has played, thumbnail and all, not the raw text they
   // once searched for (which had no artwork of its own to show, and no
@@ -235,6 +525,26 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
     const id = window.setTimeout(() => setShowSplash(false), SPLASH_MS);
     return () => window.clearTimeout(id);
   }, []);
+
+  // Applies a signed-in visitor's restored mute preference to the real
+  // player once on mount — the useState initializer above only set the
+  // local display value, not the player itself (which otherwise starts
+  // unmuted regardless of what was loaded).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (muted) player.setMuted(true);
+  }, []);
+
+  const signIn = (name: string) => {
+    const next: SpotifyUser = { name };
+    setUser(next);
+    saveJSON('spotifyUser', next);
+  };
+
+  const signOut = () => {
+    setUser(null);
+    saveJSON('spotifyUser', null);
+  };
 
   const rememberTrack = (track: YouTubeTrack) => {
     setRecentTracks((prev) => {
@@ -276,45 +586,27 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
 
   const toggleMute = () => {
     setMuted((prev) => {
-      player.setMuted(!prev);
-      return !prev;
+      const next = !prev;
+      player.setMuted(next);
+      if (user) saveBool('spotifyMuted', next);
+      return next;
     });
   };
 
-  const progress = player.duration > 0 ? (player.currentTime / player.duration) * 100 : 0;
-
   const textClass = isLight ? 'text-black' : 'text-white';
-  const sliderThumbClass = isLight ? '[&::-webkit-slider-thumb]:bg-black' : '[&::-webkit-slider-thumb]:bg-white';
 
   return (
     <div ref={containerRef} className={`relative flex h-full w-full flex-col overflow-hidden ${textClass}`} style={{ background: BG }}>
-      {/* Background — a real (memoized-by-default-options, so this never
-          recreates the WebGL scene on re-render) three.js highway of
-          streaking car lights, behind everything else. A scrim sits between
-          it and the real content so the search field, track list and
-          transport controls all stay legible over the busier bits of the
-          animation rather than just laid bare on top of it — light or dark
-          to match whichever palette is active. */}
-      <div className="absolute inset-0 z-0">
-        <Hyperspeed />
-        <div
-          className="absolute inset-0"
-          style={{
-            background: isLight
-              ? 'linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.8) 60%, rgba(255,255,255,0.92))'
-              : 'linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.8) 60%, rgba(0,0,0,0.92))',
-          }}
-        />
-      </div>
-
       <AnimatePresence>{showSplash && <SpotifySplash bg={BG} />}</AnimatePresence>
 
-      {/* Header — a top scroll-free bar with the search pill, styled after
-          Spotify's own search field, set off from the window's own
-          background with a lightly contrasting fill rather than a border. */}
-      <div className="relative z-10 flex shrink-0 items-center gap-3 px-5 pb-3 pt-4">
+      {/* Header — logo left, search centered and flexible (grows/shrinks
+          with the window rather than a fixed width), sign-in control right.
+          No background animation behind any of this anymore — the redesign
+          dropped the old Hyperspeed highway entirely, so the window is just
+          its flat light/dark palette now. */}
+      <div className="relative z-20 flex shrink-0 items-center gap-3 px-5 pb-3 pt-4">
         <SoundwaveGlyph className="h-6 w-6 shrink-0" style={{ color: ACCENT }} />
-        <form onSubmit={handleSearch} className="relative flex-1">
+        <form onSubmit={handleSearch} className="relative mx-auto w-full max-w-md flex-1">
           <SearchIcon className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${isLight ? 'text-black/60' : 'text-white/60'}`} />
           <input
             type="text"
@@ -325,6 +617,7 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
             style={{ background: CARD_BG }}
           />
         </form>
+        <SignInControl isLight={isLight} user={user} onSignIn={signIn} onSignOut={signOut} />
       </div>
 
       {/* Body — recently-played and search results both browse through the
@@ -372,103 +665,10 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
         )}
       </div>
 
-      {/* Now-playing bar — Spotify's real 3-column layout: track info on
-          the left, transport + progress centered, mute on the right (no
-          numeric volume level to show — the player only exposes a mute
-          toggle). Central play/pause is a filled circle with a contrasting
-          glyph, distinct from the green play buttons used on cards.
-          The center column gets a 2fr share against 1fr on each side
-          (not an even three-way split) — on a narrow mobile window, an
-          even third left the progress slider's own row (two time labels
-          plus the transport buttons above it) too cramped for the slider
-          to render with real width, squeezing the thumb down to barely
-          visible. minmax(0, …) on every track (not a bare 1fr/2fr) is
-          still what lets each column actually shrink below its content's
-          natural width in the first place — Tailwind's own grid-cols-N
-          utilities do the same, which is why the outer two columns
-          (track info's own truncate, the mute button) never needed this
-          called out explicitly before. */}
-      {player.current && (
-        <div
-          className={`relative z-10 grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-3 border-t px-4 py-3 ${isLight ? 'border-black/10' : 'border-white/10'}`}
-          style={{
-            background: isLight ? 'rgba(255,255,255,0.85)' : 'rgba(10,10,10,0.85)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-          }}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <img src={player.current.thumbnail} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
-            <div className="min-w-0">
-              <div className={`truncate text-sm font-medium ${textClass}`}>{player.current.title}</div>
-              <div className={`truncate text-xs ${isLight ? 'text-black/50' : 'text-white/50'}`}>{player.current.channelTitle}</div>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                aria-label="Previous"
-                onClick={player.skipPrev}
-                className={`transition ${isLight ? 'text-black/70 hover:text-black' : 'text-white/70 hover:text-white'}`}
-              >
-                <PrevIcon className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                aria-label={player.playing ? 'Pause' : 'Play'}
-                onClick={player.togglePlay}
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition hover:scale-105 ${
-                  isLight ? 'bg-black text-white' : 'bg-white text-black'
-                }`}
-              >
-                {player.loading ? (
-                  <span className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${isLight ? 'border-white/30 border-t-white' : 'border-black/30 border-t-black'}`} />
-                ) : player.playing ? (
-                  <PauseIcon className="h-4 w-4" />
-                ) : (
-                  <PlayIcon className="ml-0.5 h-4 w-4" />
-                )}
-              </button>
-              <button
-                type="button"
-                aria-label="Next"
-                onClick={player.skipNext}
-                className={`transition ${isLight ? 'text-black/70 hover:text-black' : 'text-white/70 hover:text-white'}`}
-              >
-                <NextIcon className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex w-full max-w-xs items-center gap-2">
-              <span className={`w-8 shrink-0 text-right text-[10px] tabular-nums ${isLight ? 'text-black/40' : 'text-white/40'}`}>{formatTime(player.currentTime)}</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={Number.isFinite(progress) ? progress : 0}
-                onChange={(e) => {
-                  if (player.duration > 0) player.seek((Number(e.target.value) / 100) * player.duration);
-                }}
-                className={`h-1 flex-1 cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full ${sliderThumbClass}`}
-                style={{ background: `linear-gradient(to right, ${ACCENT} ${progress}%, ${isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)'} ${progress}%)` }}
-              />
-              <span className={`w-8 text-[10px] tabular-nums ${isLight ? 'text-black/40' : 'text-white/40'}`}>{formatTime(player.duration)}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end">
-            <button
-              type="button"
-              aria-label={muted ? 'Unmute' : 'Mute'}
-              onClick={toggleMute}
-              className={`transition ${isLight ? 'text-black/70 hover:text-black' : 'text-white/70 hover:text-white'}`}
-            >
-              {muted ? <MuteIcon className="h-4 w-4" /> : <VolumeIcon className="h-4 w-4" />}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Floating mini-player, bottom-right of the body rather than a bar
+          spanning the window — see MiniPlayer's own comment for its
+          collapsed/expanded/empty states. */}
+      <MiniPlayer player={player} isLight={isLight} textClass={textClass} muted={muted} onToggleMute={toggleMute} />
     </div>
   );
 }

@@ -232,7 +232,22 @@ function TrackCard({
 // Both "Recently played" and search results browse through this same
 // scrollable grid — replaces the old 3D perspective carousel's prev/next
 // arrows and dot navigation outright, per request, rather than relocating
-// that slider control elsewhere.
+// that slider control elsewhere. Column count is driven by @container
+// queries against the window's own rendered width (its nearest ancestor
+// with @container — the body wrapper below — not the browser viewport),
+// same pattern as ProjectsApp/BentoProfile: the window can be anywhere
+// from its default ~760px to a fullscreen 100vw, and viewport breakpoints
+// alone can't tell those apart. More columns at a wider width keeps each
+// card roughly the same size instead of stretching 2-3 cards across a
+// fullscreen window. data-lenis-prevent opts this panel out of the site's
+// single global Lenis scroll instance (see index.css's [data-lenis-prevent]
+// rule) so the mouse wheel scrolls this grid instead of being captured for
+// page-level scrolling — every other app window's own scroll area does the
+// same (ChatAssistant, ProjectsApp, TerminalWindow, etc.); this one was
+// just missed when the grid replaced the carousel. no-scrollbar matches
+// those same panels' hidden-track look; scrolling is still available via
+// wheel/trackpad (now that data-lenis-prevent lets it reach this element)
+// even with no visible track to drag.
 function TrackGrid({
   tracks,
   currentId,
@@ -249,7 +264,10 @@ function TrackGrid({
   onActivate: (track: YouTubeTrack, index: number) => void;
 }) {
   return (
-    <div className="grid h-full grid-cols-2 content-start gap-4 overflow-y-auto pb-1 pr-1 sm:grid-cols-3">
+    <div
+      data-lenis-prevent
+      className="no-scrollbar grid h-full grid-cols-2 content-start gap-4 overflow-y-auto pb-1 pr-1 @[500px]:grid-cols-3 @[800px]:grid-cols-4 @[1100px]:grid-cols-5 @[1400px]:grid-cols-6 @[1700px]:grid-cols-7"
+    >
       {tracks.map((track, index) => (
         <TrackCard
           key={track.id}
@@ -663,7 +681,7 @@ export default function SpotifyApp({ isLight = true }: { isLight?: boolean }) {
       {/* Body — recently-played and search results both browse through the
           same scrollable grid of hoverable track cards (TrackGrid above) —
           no slider/carousel navigation. */}
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+      <div className="@container relative z-10 flex min-h-0 flex-1 flex-col">
         {status === 'searching' && (
           <div className={`flex h-full items-center justify-center gap-2 text-sm ${isLight ? 'text-black/60' : 'text-white/60'}`}>
             <span className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${isLight ? 'border-black/25 border-t-black/70' : 'border-white/25 border-t-white/70'}`} aria-hidden />

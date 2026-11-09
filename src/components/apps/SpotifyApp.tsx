@@ -432,12 +432,14 @@ function SignInControl({
 
 // Replaces the old full-width now-playing bar: a small floating widget
 // pinned to the body's bottom-right corner instead of a bar that claims a
-// whole row across the window. Collapsed by default — just the thumbnail,
-// the equalizer tell, and a centered play/pause — and expands into a
-// medium rounded card on hover with the full track details and transport,
-// a rotating accent-color ring glowing around it only while hovered. No
-// progress/seek slider in either state, per the redesign dropping it
-// outright rather than relocating it.
+// whole row across the window. Collapsed by default — a pill wide enough to
+// read the track's title and artist at a glance (not just an icon — the
+// point of a "now playing" widget is knowing what's playing without having
+// to hover first), plus the equalizer tell and a play/pause button — and
+// expands into a medium rounded card on hover with a larger thumbnail and
+// the full transport row, a rotating accent-color ring glowing around it
+// only while hovered. No progress/seek slider in either state, per the
+// redesign dropping it outright rather than relocating it.
 function MiniPlayer({
   player,
   isLight,
@@ -487,13 +489,17 @@ function MiniPlayer({
 
       <motion.div
         className="relative overflow-hidden"
-        animate={{ width: hovered ? 272 : 124, borderRadius: hovered ? 20 : 999 }}
+        animate={{ width: hovered ? 288 : 236, borderRadius: hovered ? 20 : 999 }}
         transition={{ type: 'spring', stiffness: 320, damping: 30 }}
         style={{ background: cardBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
       >
         {!hovered ? (
-          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <div className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-2">
             <img src={track.thumbnail} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            <div className="min-w-0 flex-1">
+              <div className={`truncate text-xs font-semibold ${textClass}`}>{track.title}</div>
+              <div className={`truncate text-[11px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>{track.channelTitle}</div>
+            </div>
             <EqualizerBars playing={player.playing} color={ACCENT} />
             <button
               type="button"

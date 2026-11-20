@@ -3,8 +3,12 @@
 // that has a live homepage set, fetched at runtime (see
 // src/lib/github-projects.ts) rather than hand-kept like Certifications'
 // image list, since this one is meant to track whatever's actually public
-// right now. Each project renders as a small mock browser window (matching
-// the desktop's own "fake macOS" chrome — traffic lights, an address bar
+// right now. A small set of "featured" repos (see FEATURED_REPOS in that
+// same file) bypass the fork/archived/homepage checks and always lead the
+// list — some genuinely are forks with real original work on top, or have
+// no hosted demo at all, which the generic filter would otherwise hide.
+// Each project renders as a small mock browser window (matching the
+// desktop's own "fake macOS" chrome — traffic lights, an address bar
 // showing the live domain) that tilts toward the cursor in 3D, rather than
 // a flat list.
 import { useEffect, useRef, useState } from 'react';
@@ -27,8 +31,9 @@ const LANGUAGE_COLORS: Record<string, string> = {
   PHP: '#4F5D95',
 };
 const FALLBACK_COLOR = '#8b8b93';
+const ACCENT = '#0a84ff';
 
-function TiltCard({ children }: { children: ReactNode }) {
+function TiltCard({ isLight, children }: { isLight: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
 
@@ -48,8 +53,8 @@ function TiltCard({ children }: { children: ReactNode }) {
       onMouseLeave={() => setTilt({ rx: 0, ry: 0 })}
       className="overflow-hidden rounded-2xl shadow-xl"
       style={{
-        background: '#15151a',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: isLight ? '#ffffff' : '#15151a',
+        border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.08)',
         transform: `perspective(900px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
         transition: 'transform 0.15s ease-out',
       }}
@@ -59,8 +64,9 @@ function TiltCard({ children }: { children: ReactNode }) {
   );
 }
 
-function ProjectCard({ project }: { project: Project }) {
+function ProjectCard({ project, isLight }: { project: Project; isLight: boolean }) {
   const domain = (() => {
+    if (!project.homepage) return null;
     try {
       return new URL(project.homepage).hostname.replace(/^www\./, '');
     } catch {
@@ -68,26 +74,47 @@ function ProjectCard({ project }: { project: Project }) {
     }
   })();
   const color = (project.language && LANGUAGE_COLORS[project.language]) || FALLBACK_COLOR;
+  const subtleText = isLight ? 'text-black/50' : 'text-white/50';
 
   return (
-    <TiltCard>
+    <TiltCard isLight={isLight}>
       {/* Mock browser chrome, matching WindowChrome's own traffic lights */}
-      <div className="flex items-center gap-1.5 px-3 py-2" style={{ background: '#1e1e24', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div
+        className="flex items-center gap-1.5 px-3 py-2"
+        style={{
+          background: isLight ? '#eceef1' : '#1e1e24',
+          borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#ff5f57' }} />
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#febc2e' }} />
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#28c840' }} />
-        <div className="ml-2 min-w-0 flex-1 truncate rounded-md px-2 py-0.5 text-center text-[10px] text-white/50" style={{ background: 'rgba(255,255,255,0.06)' }}>
-          {domain}
+        <div
+          className={`ml-2 min-w-0 flex-1 truncate rounded-md px-2 py-0.5 text-center text-[10px] ${subtleText}`}
+          style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)' }}
+        >
+          {domain ?? project.name}
         </div>
       </div>
 
       {/* No real screenshot service wired up, so the "hero" is a colored
           treatment keyed off the repo's primary language rather than a live
           preview — a monogram over a language-tinted gradient. */}
-      <div className="relative flex h-24 items-center justify-center" style={{ background: `linear-gradient(135deg, ${color}55, #0c0c10)` }}>
-        <span className="text-4xl font-black opacity-25" style={{ color }}>
+      <div
+        className="relative flex h-24 items-center justify-center"
+        style={{ background: `linear-gradient(135deg, ${color}55, ${isLight ? '#f4f3f7' : '#0c0c10'})` }}
+      >
+        <span className="text-4xl font-black opacity-30" style={{ color }}>
           {project.name.slice(0, 2).toUpperCase()}
         </span>
+        {project.featured && (
+          <span
+            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-semibold text-white"
+            style={{ background: ACCENT }}
+          >
+            Featured
+          </span>
+        )}
         {project.stars > 0 && (
           <span className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] text-white/80" style={{ background: 'rgba(0,0,0,0.45)' }}>
             ★ {project.stars}
@@ -96,13 +123,17 @@ function ProjectCard({ project }: { project: Project }) {
       </div>
 
       <div className="p-3.5">
-        <div className="truncate text-sm font-semibold text-white">{project.name}</div>
-        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/60">{project.description}</p>
+        <div className={`truncate text-sm font-semibold ${isLight ? 'text-[#1c1c1e]' : 'text-white'}`}>{project.name}</div>
+        <p className={`mt-1 line-clamp-2 text-xs leading-relaxed ${isLight ? 'text-black/55' : 'text-white/60'}`}>{project.description}</p>
 
         {project.topics.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {project.topics.slice(0, 4).map((t) => (
-              <span key={t} className="rounded-full px-2 py-0.5 text-[9px] text-white/60" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              <span
+                key={t}
+                className={`rounded-full px-2 py-0.5 text-[9px] ${isLight ? 'text-black/55' : 'text-white/60'}`}
+                style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)' }}
+              >
                 {t}
               </span>
             ))}
@@ -110,28 +141,32 @@ function ProjectCard({ project }: { project: Project }) {
         )}
 
         <div className="mt-3 flex items-center gap-2">
-          <a
-            href={project.homepage}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 rounded-full py-1.5 text-center text-xs font-semibold text-black transition hover:brightness-110"
-            style={{ background: color }}
-          >
-            Live ↗
-          </a>
+          {project.homepage && (
+            <a
+              href={project.homepage}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 rounded-full py-1.5 text-center text-xs font-semibold text-black transition hover:brightness-110"
+              style={{ background: color }}
+            >
+              Live ↗
+            </a>
+          )}
           <a
             href={project.repoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-full px-3 py-1.5 text-center text-xs font-medium text-white/80 transition hover:bg-white/10"
-            style={{ border: '1px solid rgba(255,255,255,0.14)' }}
+            className={`rounded-full px-3 py-1.5 text-center text-xs font-medium transition ${
+              project.homepage ? '' : 'flex-1'
+            } ${isLight ? 'text-black/70 hover:bg-black/5' : 'text-white/80 hover:bg-white/10'}`}
+            style={{ border: isLight ? '1px solid rgba(0,0,0,0.14)' : '1px solid rgba(255,255,255,0.14)' }}
           >
-            Code
+            Code ↗
           </a>
         </div>
 
         {project.language && (
-          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-white/40">
+          <div className={`mt-2 flex items-center gap-1.5 text-[10px] ${isLight ? 'text-black/45' : 'text-white/40'}`}>
             <span className="h-2 w-2 rounded-full" style={{ background: color }} />
             {project.language}
           </div>
@@ -141,7 +176,7 @@ function ProjectCard({ project }: { project: Project }) {
   );
 }
 
-export default function ProjectsApp() {
+export default function ProjectsApp({ isLight = true }: { isLight?: boolean }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -164,13 +199,23 @@ export default function ProjectsApp() {
     };
   }, []);
 
+  const bg = isLight ? '#f4f3f7' : '#0c0c10';
+  const headingClass = isLight ? 'text-[#1c1c1e]' : 'text-white';
+  const subTextClass = isLight ? 'text-black/50' : 'text-white/50';
+  const linkHoverClass = isLight ? 'hover:text-black' : 'hover:text-white/80';
+
   return (
-    <div data-lenis-prevent className="no-scrollbar h-full w-full overflow-y-auto" style={{ background: '#0c0c10' }}>
+    <div data-lenis-prevent className="no-scrollbar h-full w-full overflow-y-auto" style={{ background: bg }}>
       <div className="px-6 pb-2 pt-6">
-        <h2 className="text-lg font-semibold text-white">Projects</h2>
-        <p className="text-xs text-white/50">
+        <h2 className={`text-lg font-semibold ${headingClass}`}>Projects</h2>
+        <p className={`text-xs ${subTextClass}`}>
           Live, public projects from{' '}
-          <a href={`https://github.com/${GITHUB_USER}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-white/80">
+          <a
+            href={`https://github.com/${GITHUB_USER}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`underline underline-offset-2 ${linkHoverClass}`}
+          >
             github.com/{GITHUB_USER}
           </a>
           .
@@ -179,30 +224,38 @@ export default function ProjectsApp() {
 
       <div className="px-5 pb-6">
         {status === 'loading' && (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-white/50">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
+          <div className={`flex items-center justify-center gap-2 py-16 text-sm ${subTextClass}`}>
+            <span
+              className="h-4 w-4 animate-spin rounded-full border-2"
+              style={{ borderColor: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)', borderTopColor: isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)' }}
+            />
             Loading projects&hellip;
           </div>
         )}
 
         {status === 'error' && (
-          <div className="flex flex-col items-center gap-2 py-16 text-center text-sm text-white/50">
+          <div className={`flex flex-col items-center gap-2 py-16 text-center text-sm ${subTextClass}`}>
             <p>{error}</p>
-            <a href={`https://github.com/${GITHUB_USER}`} target="_blank" rel="noopener noreferrer" className="text-white/80 underline underline-offset-2">
+            <a
+              href={`https://github.com/${GITHUB_USER}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`underline underline-offset-2 ${isLight ? 'text-black/80' : 'text-white/80'}`}
+            >
               View on GitHub instead ↗
             </a>
           </div>
         )}
 
         {status === 'ready' && projects.length === 0 && (
-          <div className="py-16 text-center text-sm text-white/50">No public projects with a live URL yet.</div>
+          <div className={`py-16 text-center text-sm ${subTextClass}`}>No public projects with a live URL yet.</div>
         )}
 
         {status === 'ready' && projects.length > 0 && (
           <div className="@container">
-            <div className="grid grid-cols-1 gap-4 @[560px]:grid-cols-2 @[900px]:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 @[560px]:grid-cols-2 @[900px]:grid-cols-3 @[1200px]:grid-cols-4">
               {projects.map((p) => (
-                <ProjectCard key={p.id} project={p} />
+                <ProjectCard key={p.id} project={p} isLight={isLight} />
               ))}
             </div>
           </div>

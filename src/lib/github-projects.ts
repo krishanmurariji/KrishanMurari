@@ -8,16 +8,28 @@
 // real-world limit for a portfolio).
 export const GITHUB_USER = 'Krishanmurariji';
 
+// Explicitly featured repos — always shown, always first, regardless of the
+// usual fork/archived/has-a-homepage filter below. horilla-ai-recruitment is
+// a fork (of horilla-opensource/horilla) with real original work added on
+// top, which the generic filter would otherwise hide outright; the others
+// are just repos worth leading with. Matched case-insensitively against the
+// repo name.
+const FEATURED_REPOS = new Set(['horilla-ai-recruitment', 'ally-releases', 'noor', 'smallmart']);
+
 export interface Project {
   id: number;
   name: string;
   description: string;
-  homepage: string;
+  // Null when the repo has no homepage set (e.g. a mobile app with no
+  // hosted web demo) — featured repos bypass the homepage requirement
+  // below, so this can no longer be assumed non-null the way it used to be.
+  homepage: string | null;
   repoUrl: string;
   language: string | null;
   topics: string[];
   stars: number;
   updatedAt: string;
+  featured: boolean;
 }
 
 interface GitHubRepo {
@@ -59,22 +71,28 @@ export function fetchLiveProjects(): Promise<Project[]> {
     })
     .then((repos) => {
       const projects = repos
-        // Only the user's own work, still public, actually deployed
-        // somewhere — a fork or an archived/homepage-less repo isn't
-        // something to show off as "a project" here.
-        .filter((r) => !r.fork && !r.archived && !!r.homepage?.trim())
-        .map((r) => ({
+        .map((r) => ({ repo: r, featured: FEATURED_REPOS.has(r.name.toLowerCase()) }))
+        // Everything else still needs to be the user's own work, still
+        // public, and actually deployed somewhere — a fork or an
+        // archived/homepage-less repo isn't something to show off as "a
+        // project" here. A featured repo skips all three checks.
+        .filter(({ repo: r, featured }) => featured || (!r.fork && !r.archived && !!r.homepage?.trim()))
+        .map(({ repo: r, featured }) => ({
           id: r.id,
           name: r.name,
           description: r.description?.trim() || 'No description provided.',
-          homepage: r.homepage!.trim(),
+          homepage: r.homepage?.trim() || null,
           repoUrl: r.html_url,
           language: r.language,
           topics: r.topics ?? [],
           stars: r.stargazers_count,
           updatedAt: r.updated_at,
+          featured,
         }))
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        .sort((a, b) => {
+          if (a.featured !== b.featured) return a.featured ? -1 : 1;
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
       cache = projects;
       return projects;
     })

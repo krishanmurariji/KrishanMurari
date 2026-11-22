@@ -1,35 +1,33 @@
-// Live project list for the dock's "Projects" window (see
-// src/components/apps/ProjectsApp.tsx) — fetched from the public GitHub API
-// at runtime rather than hand-kept like the Certifications file list, since
-// this one really is meant to track whatever the user currently has public
-// with a live homepage set, not a fixed snapshot. No token needed: GitHub's
-// REST API allows unauthenticated reads of public repos (60 req/hour per
-// caller IP — since this runs client-side, that's per visitor, never a
-// real-world limit for a portfolio).
+// Project list for the dock's "Projects" window (see
+// src/components/apps/ProjectsApp.tsx) — a hand-picked set of repos (see
+// SHOWN_REPOS below), fetched live from the public GitHub API at runtime so
+// each card's stars/description/etc. stay current without a rebuild, but
+// which repos appear at all is curated rather than auto-discovered from
+// everything public on the account. No token needed: GitHub's REST API
+// allows unauthenticated reads of public repos (60 req/hour per caller IP —
+// since this runs client-side, that's per visitor, never a real-world limit
+// for a portfolio).
 export const GITHUB_USER = 'Krishanmurariji';
 
-// Explicitly featured repos — always shown, always first, regardless of the
-// usual fork/archived/has-a-homepage filter below. horilla-ai-recruitment is
-// a fork (of horilla-opensource/horilla) with real original work added on
-// top, which the generic filter would otherwise hide outright; the others
-// are just repos worth leading with. Matched case-insensitively against the
-// repo name.
-const FEATURED_REPOS = new Set(['horilla-ai-recruitment', 'ally-releases', 'noor', 'smallmart']);
+// The only repos shown on the Projects page, in display order. Matched
+// case-insensitively against the repo name; a repo's fork/archived status
+// and whether it has a homepage set don't matter here — if it's listed, it
+// shows, regardless (e.g. noor has no homepage set and still belongs here).
+const SHOWN_REPOS = ['noor', 'ally-releases', 'smallmart'];
 
 export interface Project {
   id: number;
   name: string;
   description: string;
   // Null when the repo has no homepage set (e.g. a mobile app with no
-  // hosted web demo) — featured repos bypass the homepage requirement
-  // below, so this can no longer be assumed non-null the way it used to be.
+  // hosted web demo) — the card adapts (see ProjectsApp.tsx) rather than
+  // assuming every shown repo has a live URL.
   homepage: string | null;
   repoUrl: string;
   language: string | null;
   topics: string[];
   stars: number;
   updatedAt: string;
-  featured: boolean;
 }
 
 interface GitHubRepo {
@@ -71,13 +69,8 @@ export function fetchLiveProjects(): Promise<Project[]> {
     })
     .then((repos) => {
       const projects = repos
-        .map((r) => ({ repo: r, featured: FEATURED_REPOS.has(r.name.toLowerCase()) }))
-        // Everything else still needs to be the user's own work, still
-        // public, and actually deployed somewhere — a fork or an
-        // archived/homepage-less repo isn't something to show off as "a
-        // project" here. A featured repo skips all three checks.
-        .filter(({ repo: r, featured }) => featured || (!r.fork && !r.archived && !!r.homepage?.trim()))
-        .map(({ repo: r, featured }) => ({
+        .filter((r) => SHOWN_REPOS.includes(r.name.toLowerCase()))
+        .map((r) => ({
           id: r.id,
           name: r.name,
           description: r.description?.trim() || 'No description provided.',
@@ -87,12 +80,8 @@ export function fetchLiveProjects(): Promise<Project[]> {
           topics: r.topics ?? [],
           stars: r.stargazers_count,
           updatedAt: r.updated_at,
-          featured,
         }))
-        .sort((a, b) => {
-          if (a.featured !== b.featured) return a.featured ? -1 : 1;
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        });
+        .sort((a, b) => SHOWN_REPOS.indexOf(a.name.toLowerCase()) - SHOWN_REPOS.indexOf(b.name.toLowerCase()));
       cache = projects;
       return projects;
     })

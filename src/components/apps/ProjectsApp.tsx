@@ -1,16 +1,12 @@
 // Content for the dock's "Projects" window (see APP_BODIES in
-// AppWindow.tsx) — every public, non-fork repo on github.com/Krishanmurariji
-// that has a live homepage set, fetched at runtime (see
-// src/lib/github-projects.ts) rather than hand-kept like Certifications'
-// image list, since this one is meant to track whatever's actually public
-// right now. A small set of "featured" repos (see FEATURED_REPOS in that
-// same file) bypass the fork/archived/homepage checks and always lead the
-// list — some genuinely are forks with real original work on top, or have
-// no hosted demo at all, which the generic filter would otherwise hide.
-// Each project renders as a small mock browser window (matching the
-// desktop's own "fake macOS" chrome — traffic lights, an address bar
-// showing the live domain) that tilts toward the cursor in 3D, rather than
-// a flat list.
+// AppWindow.tsx) — a hand-picked set of repos (see SHOWN_REPOS in
+// src/lib/github-projects.ts), fetched live from GitHub at runtime so each
+// card's stars/description/etc. stay current without a rebuild, same as
+// before, but which repos show at all is curated rather than everything
+// public with a homepage. Each project renders as a small mock browser
+// window (matching the desktop's own "fake macOS" chrome — traffic lights,
+// an address bar showing the live domain) that tilts toward the cursor in
+// 3D, rather than a flat list.
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { fetchLiveProjects, GITHUB_USER, type Project } from '../../lib/github-projects';
@@ -31,7 +27,6 @@ const LANGUAGE_COLORS: Record<string, string> = {
   PHP: '#4F5D95',
 };
 const FALLBACK_COLOR = '#8b8b93';
-const ACCENT = '#0a84ff';
 
 function TiltCard({ isLight, children }: { isLight: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -107,14 +102,6 @@ function ProjectCard({ project, isLight }: { project: Project; isLight: boolean 
         <span className="text-4xl font-black opacity-30" style={{ color }}>
           {project.name.slice(0, 2).toUpperCase()}
         </span>
-        {project.featured && (
-          <span
-            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-semibold text-white"
-            style={{ background: ACCENT }}
-          >
-            Featured
-          </span>
-        )}
         {project.stars > 0 && (
           <span className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] text-white/80" style={{ background: 'rgba(0,0,0,0.45)' }}>
             ★ {project.stars}

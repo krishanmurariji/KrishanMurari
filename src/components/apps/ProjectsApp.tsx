@@ -189,24 +189,11 @@ export default function ProjectsApp({ isLight = true }: { isLight?: boolean }) {
   const bg = isLight ? '#f4f3f7' : '#0c0c10';
   const headingClass = isLight ? 'text-[#1c1c1e]' : 'text-white';
   const subTextClass = isLight ? 'text-black/50' : 'text-white/50';
-  const linkHoverClass = isLight ? 'hover:text-black' : 'hover:text-white/80';
 
   return (
     <div data-lenis-prevent className="no-scrollbar h-full w-full overflow-y-auto" style={{ background: bg }}>
       <div className="px-6 pb-2 pt-6">
         <h2 className={`text-lg font-semibold ${headingClass}`}>Projects</h2>
-        <p className={`text-xs ${subTextClass}`}>
-          Live, public projects from{' '}
-          <a
-            href={`https://github.com/${GITHUB_USER}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`underline underline-offset-2 ${linkHoverClass}`}
-          >
-            github.com/{GITHUB_USER}
-          </a>
-          .
-        </p>
       </div>
 
       <div className="px-5 pb-6">

@@ -12,8 +12,10 @@ export const GITHUB_USER = 'Krishanmurariji';
 // The only repos shown on the Projects page, in display order. Matched
 // case-insensitively against the repo name; a repo's fork/archived status
 // and whether it has a homepage set don't matter here — if it's listed, it
-// shows, regardless (e.g. noor has no homepage set and still belongs here).
-const SHOWN_REPOS = ['noor', 'ally-releases', 'smallmart'];
+// shows, regardless (e.g. noor has no homepage set, and horilla-ai-
+// recruitment is a fork of horilla-opensource/horilla, and both still
+// belong here).
+const SHOWN_REPOS = ['noor', 'ally-releases', 'smallmart', 'horilla-ai-recruitment'];
 
 export interface Project {
   id: number;

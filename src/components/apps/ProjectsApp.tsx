@@ -91,7 +91,7 @@ function ProjectCard({ project, isLight }: { project: Project; isLight: boolean 
 
         {!project.homepage && (
           <div
-            className="absolute inset-x-0 bottom-0 top-[52px] flex items-center justify-center px-4 text-center text-[11.5px] font-semibold text-white"
+            className="absolute inset-x-0 bottom-0 top-[52px] flex items-center justify-center rounded-b-[20px] px-4 text-center text-[11.5px] font-semibold text-white"
             style={{ background: 'rgba(0,0,0,0.55)' }}
           >
             No hosted demo — code only

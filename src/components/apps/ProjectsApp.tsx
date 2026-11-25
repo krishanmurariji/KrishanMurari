@@ -40,24 +40,38 @@ function ProjectCard({ project, isLight }: { project: Project; isLight: boolean 
 
   return (
     <div className="flex flex-col gap-3.5">
-      {/* The site preview — stands in for a real screenshot/iframe of the
-          live homepage, which needs either a screenshot service or a
-          self-hosted headless-browser render; not wired up yet. Wrapped in
-          its own positioning context (rather than sharing one with the
-          chips/topics rows below) so the language pill's bottom-0 lands on
-          this hero's own edge instead of the bottom of the whole card. */}
+      {/* The site preview. Wrapped in its own positioning context (rather
+          than sharing one with the chips/topics rows below) so the language
+          pill's bottom-0 lands on this hero's own edge instead of the
+          bottom of the whole card. */}
       <div className="relative">
       <div className="relative h-[230px] overflow-hidden rounded-[20px] transition hover:-translate-y-0.5" style={{ background: heroBg, boxShadow: cardShadow }}>
-        <div className="p-[18px] pt-[58px]">
-          <div className="h-[7px] w-[34%] rounded" style={{ background: 'rgba(255,255,255,0.5)' }} />
-          <div className="mt-2.5 h-[18px] w-[62%] rounded-md" style={{ background: 'rgba(255,255,255,0.28)' }} />
-          <div className="mt-2.5 flex gap-1.5">
-            <div className="h-6 flex-1 rounded-md" style={{ background: 'rgba(255,255,255,0.16)' }} />
-            <div className="h-6 flex-1 rounded-md" style={{ background: 'rgba(255,255,255,0.16)' }} />
-            <div className="h-6 flex-1 rounded-md" style={{ background: 'rgba(255,255,255,0.16)' }} />
+        {project.homepage ? (
+          // A real live embed of the homepage, cropped to the hero's box —
+          // not a scaled-down "whole page" screenshot, just however the
+          // site renders at this width. Some sites refuse to be framed
+          // (X-Frame-Options/CSP) and show blank here instead; there's no
+          // reliable cross-origin way to detect that and fall back.
+          <iframe
+            src={project.homepage}
+            title={`${project.name} preview`}
+            loading="lazy"
+            tabIndex={-1}
+            sandbox="allow-scripts allow-same-origin"
+            className="pointer-events-none absolute inset-0 h-full w-full border-0"
+          />
+        ) : (
+          <div className="p-[18px] pt-[58px]">
+            <div className="h-[7px] w-[34%] rounded" style={{ background: 'rgba(255,255,255,0.5)' }} />
+            <div className="mt-2.5 h-[18px] w-[62%] rounded-md" style={{ background: 'rgba(255,255,255,0.28)' }} />
+            <div className="mt-2.5 flex gap-1.5">
+              <div className="h-6 flex-1 rounded-md" style={{ background: 'rgba(255,255,255,0.16)' }} />
+              <div className="h-6 flex-1 rounded-md" style={{ background: 'rgba(255,255,255,0.16)' }} />
+              <div className="h-6 flex-1 rounded-md" style={{ background: 'rgba(255,255,255,0.16)' }} />
+            </div>
+            <div className="mt-3 h-[60px] w-full rounded-lg" style={{ background: 'rgba(255,255,255,0.12)' }} />
           </div>
-          <div className="mt-3 h-[60px] w-full rounded-lg" style={{ background: 'rgba(255,255,255,0.12)' }} />
-        </div>
+        )}
 
         {/* Name + description, blurred glass over the preview */}
         <div
